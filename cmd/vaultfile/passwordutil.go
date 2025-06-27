@@ -1,4 +1,4 @@
-package passwordutil
+package cmd
 
 import (
 	"bytes"
@@ -49,6 +49,10 @@ func PromptPassword(reader PasswordReader, output io.Writer, confirm bool) ([]by
 		reader = &defaultPasswordReader{}
 	}
 
+	if output == nil {
+		return nil, errors.New("output writer cannot be nil")
+	}
+
 	if !reader.IsTerminal() {
 		return nil, errors.New("password input requires a terminal (input is not a TTY)")
 	}
@@ -58,6 +62,10 @@ func PromptPassword(reader PasswordReader, output io.Writer, confirm bool) ([]by
 		return nil, err
 	}
 
+	if len(password) == 0 {
+		return nil, errors.New("password cannot be empty")
+	}
+
 	if !confirm {
 		return password, nil
 	}
@@ -65,19 +73,16 @@ func PromptPassword(reader PasswordReader, output io.Writer, confirm bool) ([]by
 	confirmPassword, err := reader.ReadPassword("Confirm password: ", output)
 	if err != nil {
 		ZeroPassword(password)
-
-		return nil, err
+		return nil, fmt.Errorf("failed to read confirmation password: %w", err)
 	}
 
 	if !bytes.Equal(password, confirmPassword) {
 		ZeroPassword(password)
 		ZeroPassword(confirmPassword)
-
 		return nil, errors.New("passwords do not match")
 	}
 
 	ZeroPassword(confirmPassword)
-
 	return password, nil
 }
 

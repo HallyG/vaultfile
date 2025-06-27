@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/HallyG/vaultfile/internal/vaultfile"
+	"github.com/HallyG/vaultfile/internal/vault"
 )
 
 func main() {
@@ -15,14 +15,14 @@ func main() {
 	plainText := []byte("hello, world!")
 	output := bytes.NewBuffer(nil)
 
-	vault, err := vaultfile.New()
+	v, err := vault.New()
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	fmt.Println("encrypting")
 	fmt.Println("	plaintext:", string(plainText))
-	err = vault.Encrypt(ctx, output, password, plainText)
+	err = v.Encrypt(ctx, output, password, plainText)
 	if err != nil {
 		log.Fatalf("failed to encrypt: %v", err)
 	}
@@ -30,7 +30,7 @@ func main() {
 
 	fmt.Println("decrypting")
 	fmt.Println("	ciphertext len:", len(output.Bytes()))
-	decrypted, err := vault.Decrypt(ctx, bytes.NewBuffer(output.Bytes()), password)
+	decrypted, err := v.Decrypt(ctx, bytes.NewBuffer(output.Bytes()), password)
 	if err != nil {
 		log.Fatalf("failed to decrypt: %v", err)
 	}

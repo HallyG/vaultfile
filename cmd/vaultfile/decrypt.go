@@ -8,8 +8,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/HallyG/vaultfile/internal/passwordutil"
-	"github.com/HallyG/vaultfile/internal/vaultfile"
+	"github.com/HallyG/vaultfile/internal/vault"
 	"github.com/spf13/cobra"
 )
 
@@ -35,7 +34,7 @@ var (
 				return fmt.Errorf("failed to get input flag: %w", err)
 			}
 
-			return processContent(cmd.Context(), inputPath, outputPath, force, false, func(ctx context.Context, v *vaultfile.Vault, input []byte, password []byte, output io.Writer) error {
+			return processContent(cmd.Context(), inputPath, outputPath, force, false, func(ctx context.Context, v *vault.Vault, input []byte, password []byte, output io.Writer) error {
 				plainText, err := v.Decrypt(ctx, bytes.NewReader(input), password)
 				if err != nil {
 					return fmt.Errorf("decryption failed: %w", err)
@@ -69,7 +68,7 @@ var (
 				return fmt.Errorf("failed to get input flag: %w", err)
 			}
 
-			return processContent(cmd.Context(), inputPath, outputPath, force, true, func(ctx context.Context, v *vaultfile.Vault, input []byte, password []byte, output io.Writer) error {
+			return processContent(cmd.Context(), inputPath, outputPath, force, true, func(ctx context.Context, v *vault.Vault, input []byte, password []byte, output io.Writer) error {
 				if err := v.Encrypt(ctx, output, password, input); err != nil {
 					return fmt.Errorf("encryption failed: %w", err)
 				}
@@ -93,7 +92,7 @@ func configureFlags(cmd *cobra.Command) {
 	_ = cmd.MarkFlagRequired("input")
 }
 
-type processFunc func(ctx context.Context, v *vaultfile.Vault, input []byte, password []byte, output io.Writer) error
+type processFunc func(ctx context.Context, v *vault.Vault, input []byte, password []byte, output io.Writer) error
 
 func processContent(ctx context.Context, inputPath, outputPath string, force bool, confirmPassword bool, pf processFunc) error {
 	input, err := readInput(inputPath)
@@ -101,13 +100,13 @@ func processContent(ctx context.Context, inputPath, outputPath string, force boo
 		return fmt.Errorf("failed to read input: %w", err)
 	}
 
-	password, err := passwordutil.PromptPassword(nil, os.Stderr, confirmPassword)
+	password, err := PromptPassword(nil, os.Stderr, confirmPassword)
 	if err != nil {
 		return fmt.Errorf("failed to read password: %w", err)
 	}
-	defer passwordutil.ZeroPassword(password)
+	defer ZeroPassword(password)
 
-	v, err := vaultfile.New(vaultfile.WithLogger(slog.Default()))
+	v, err := vault.New(vault.WithLogger(slog.Default()))
 	if err != nil {
 		return fmt.Errorf("failed to create vault: %w", err)
 	}

@@ -6,9 +6,11 @@ PWD := $(shell pwd)
 BUILD_DIR := ${PWD}/build
 
 GO_CMD ?= go
-GO_LDFLAGS ?= -s -w -buildid= -X 'github.com/HallyG/${APP_NAME}/cmd.BuildShortSHA=$(BUILD_SHORT_SHA)' -X 'github.com/HallyG/${APP_NAME}/cmd.BuildVersion=$(BUILD_VERSION)'
+GO_LDFLAGS ?= -s -w -buildid= -X 'github.com/HallyG/${APP_NAME}/cmd/vaultfile.BuildShortSHA=$(BUILD_SHORT_SHA)' -X 'github.com/HallyG/${APP_NAME}/cmd/vaultfile.BuildVersion=$(BUILD_VERSION)'
 GO_PKG_MAIN := ${PWD}/main.go
 GO_PKGS := $(PWD)/internal/... $(PWD)/cmd/... 
+EXCLUDE_PKGS := github.com/HallyG/vaultfile/cmd/vaultfile
+GO_COVERAGE_PKGS := $(filter-out $(EXCLUDE_PKGS), $(shell go list $(GO_PKGS)))
 GO_COVERAGE_FILE := $(BUILD_DIR)/cover.out
 GO_COVERAGE_TEXT_FILE := $(BUILD_DIR)/cover.txt
 GO_COVERAGE_HTML_FILE := $(BUILD_DIR)/cover.html
@@ -45,7 +47,7 @@ test:
 test/cover:
 	@mkdir -p ${BUILD_DIR}
 	@rm -f ${GO_COVERAGE_FILE} ${GO_COVERAGE_TEXT_FILE} ${GO_COVERAGE_HTML_FILE}
-	@$(GO_CMD) test -timeout 30s -race -coverprofile=${GO_COVERAGE_FILE} ${GO_PKGS}
+	@$(GO_CMD) test ${GO_BUILD_TAGS} -timeout 10s -race -coverprofile=${GO_COVERAGE_FILE} ${GO_COVERAGE_PKGS}
 	@$(GO_CMD) tool cover -func ${GO_COVERAGE_FILE} -o ${GO_COVERAGE_TEXT_FILE}
 	@$(GO_CMD) tool cover -html ${GO_COVERAGE_FILE} -o ${GO_COVERAGE_HTML_FILE}
 
