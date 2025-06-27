@@ -33,8 +33,8 @@ const (
 	kdfLen                     = kdfMemoryLen + kdfIterationsLen + kdfThreadsLen
 	totalFileLengthLen         = 2
 	hmacLen                    = sha256.Size
-	totalHeaderLen             = magicNumberLen + versionLen + saltLen + nonceLen + kdfLen + totalFileLengthLen + hmacLen
-	maxCipherTextSize          = math.MaxUint16
+	TotalHeaderLen             = magicNumberLen + versionLen + saltLen + nonceLen + kdfLen + totalFileLengthLen + hmacLen
+	MaxCipherTextSize          = math.MaxUint16
 )
 
 const ()
@@ -57,13 +57,13 @@ func Parse(input io.Reader) (*Header, io.Reader, error) {
 	var header Header
 	r := bufio.NewReader(input)
 
-	headerBuf := make([]byte, totalHeaderLen)
+	headerBuf := make([]byte, TotalHeaderLen)
 	if n, err := io.ReadFull(r, headerBuf); err != nil {
 		if err == io.EOF || errors.Is(err, io.ErrUnexpectedEOF) {
-			return nil, nil, fmt.Errorf("incomplete header, expected %d bytes, read %d: %w", totalHeaderLen, n, err)
+			return nil, nil, fmt.Errorf("incomplete header, expected %d bytes, read %d: %w", TotalHeaderLen, n, err)
 		}
 
-		return nil, nil, fmt.Errorf("failed to read header, expected %d bytes: %w, ", totalHeaderLen, err)
+		return nil, nil, fmt.Errorf("failed to read header, expected %d bytes: %w, ", TotalHeaderLen, err)
 	}
 
 	offset := 0
@@ -108,7 +108,7 @@ func Parse(input io.Reader) (*Header, io.Reader, error) {
 	return &header, payload, nil
 }
 
-func Encode(output io.Writer, mac hash.Hash, salt [saltLen]byte, nonce [nonceLen]byte, kdfParams [kdfLen]byte, cipherTextLen uint16) error {
+func Encode(output io.Writer, mac hash.Hash, salt [saltLen]byte, nonce [nonceLen]byte, kdfParams KDFParams, cipherTextLen uint16) error {
 	w := io.MultiWriter(output, mac)
 
 	if _, err := w.Write([]byte(magicNumber)); err != nil {
@@ -127,11 +127,16 @@ func Encode(output io.Writer, mac hash.Hash, salt [saltLen]byte, nonce [nonceLen
 		return fmt.Errorf("failed to write nonce: %w", err)
 	}
 
-	if _, err := w.Write(kdfParams[:]); err != nil {
+	kdfParamsBytes, err := EncodeKDFParams(&kdfParams)
+	if err != nil {
+		return fmt.Errorf("failed to encode kdf params: %w", err)
+	}
+
+	if _, err := w.Write(kdfParamsBytes[:]); err != nil {
 		return fmt.Errorf("failed to write kdf params: %w", err)
 	}
 
-	totalPayloadLength := uint16(totalHeaderLen) + cipherTextLen
+	totalPayloadLength := uint16(TotalHeaderLen) + cipherTextLen
 	if err := binary.Write(w, binary.BigEndian, totalPayloadLength); err != nil {
 		return fmt.Errorf("failed to write total payload length: %w", err)
 	}

@@ -13,16 +13,6 @@ import (
 	"github.com/HallyG/vaultfile/internal/krypto"
 )
 
-type Version uint8
-
-func (v Version) String() string {
-	return fmt.Sprintf("v%d", v)
-}
-
-const (
-	VersionUnknown Version = 0
-)
-
 var (
 	ErrInvalidHeader       = errors.New("invalid header format")
 	ErrFileTruncated       = errors.New("file truncated")
@@ -33,7 +23,7 @@ var (
 	ErrInvalidPassword     = errors.New("invalid password")
 	ErrNilWriter           = errors.New("writer is nil")
 	ErrNilReader           = errors.New("reader is nil")
-	ErrCipherTextTooLarge  = fmt.Errorf("ciphertext must be smaller than %d bytes", versionV1MaxCipherTextSize)
+	ErrCipherTextTooLarge  = fmt.Errorf("ciphertext must be smaller than %d bytes", format.MaxCipherTextSize)
 )
 
 type VaultFileError struct {
@@ -76,12 +66,12 @@ func New(opts ...func(*Vault)) (*Vault, error) {
 
 	v.logger = v.logger.
 		WithGroup("vault").
-		With(slog.String("version", VersionV1.String()))
+		With(slog.String("version", format.VersionV1.String()))
 	return v, nil
 }
 
-func (v *Vault) Version() Version {
-	return VersionV1
+func (v *Vault) Version() format.Version {
+	return format.VersionV1
 }
 
 func (v *Vault) Encrypt(ctx context.Context, w io.Writer, password []byte, plainText []byte) error {
@@ -133,16 +123,37 @@ func (v *Vault) Encrypt(ctx context.Context, w io.Writer, password []byte, plain
 		}
 	}
 
-	if len(cipherText) > versionV1MaxCipherTextSize {
+	if len(cipherText) > format.MaxCipherTextSize {
 		return &VaultFileError{
-			Err:   fmt.Errorf("%w: ciphertext size %d exceeds maximum %d", ErrCipherTextTooLarge, len(cipherText), versionV1MaxCipherTextSize),
+			Err:   ErrCipherTextTooLarge,
 			Field: "ciphertext",
-			Value: len(cipherText),
+			Value: nil,
 		}
 	}
 
 	v.logger.Debug("encrypted plaintext", slog.Int("nonce.size", len(nonce)), slog.Int("ciphertext.size", len(cipherText)))
-	return v.writeBinary(w, salt, nonce, v.kdfParams, cipherText, hmacKey)
+	formatKDFParams := &format.KDFParams{
+		MemoryKiB:     v.kdfParams.MemoryKiB,
+		NumIterations: v.kdfParams.NumIterations,
+		NumThreads:    v.kdfParams.NumThreads,
+	}
+
+	// Use format package for encoding with HMAC
+	mac := hmac.New(sha256.New, hmacKey)
+	if err := format.Encode(w, mac, [16]byte(salt), [24]byte(nonce), *formatKDFParams, uint16(len(cipherText))); err != nil {
+		return err
+	}
+
+	// Write ciphertext
+	if _, err := w.Write(cipherText); err != nil {
+		return &VaultFileError{
+			Err:   fmt.Errorf("failed to write ciphertext: %w", err),
+			Field: "ciphertext",
+			Value: nil,
+		}
+	}
+
+	return nil
 }
 
 func (v *Vault) Decrypt(ctx context.Context, input io.Reader, password []byte) ([]byte, error) {
@@ -198,7 +209,7 @@ func (v *Vault) Decrypt(ctx context.Context, input io.Reader, password []byte) (
 	}
 
 	// Validate total file length
-	totalLen := len(cipherText) + versionV1LenHeader
+	totalLen := len(cipherText) + format.TotalHeaderLen
 	if uint16(totalLen) != header.TotalPayloadLength {
 		return nil, &VaultFileError{
 			Err:   fmt.Errorf("%w: expected %d bytes, read %d", ErrFileTruncated, header.TotalPayloadLength, totalLen),
@@ -208,7 +219,12 @@ func (v *Vault) Decrypt(ctx context.Context, input io.Reader, password []byte) (
 	}
 
 	// Decrypt
-	plainText, err := v.decrypt(ctx, password, header.CipherTextKeySalt[:], header.CipherTextKeyNonce[:], internalKDFParams, cipherText, krypto.ChaCha20KeySize)
+	cipher, err := v.deriveEncryptionKey(ctx, password, header.CipherTextKeySalt[:], internalKDFParams, krypto.ChaCha20KeySize)
+	if err != nil {
+		return nil, err
+	}
+
+	plainText, err := cipher.Decrypt(ctx, cipherText, header.CipherTextKeyNonce[:], nil)
 	if err != nil {
 		return nil, &VaultFileError{
 			Err:   fmt.Errorf("%w: %v", ErrDecryptionFailed, err),
@@ -218,4 +234,52 @@ func (v *Vault) Decrypt(ctx context.Context, input io.Reader, password []byte) (
 	}
 
 	return plainText, nil
+}
+
+func (v *Vault) deriveHMACKey(ctx context.Context, password []byte, salt []byte, keySize uint32) ([]byte, error) {
+	// We use a predefined argon2id params so prevent a resource exhaustion attack where we'd need to generate the password from header values before we verify them
+	kdfParams := krypto.DefaultArgon2idParams()
+	v.logger.Debug("deriving hmac key", slog.Group("key.hmac",
+		slog.Int("size", int(keySize)),
+		slog.Int("salt.size", len(salt)),
+		slog.Group("argon2id",
+			slog.Int("memory_kib", int(kdfParams.MemoryKiB)),
+			slog.Int("num_iterations", int(kdfParams.NumIterations)),
+			slog.Int("num_threads", int(kdfParams.NumThreads)),
+		)),
+	)
+
+	return krypto.DeriveKeyFromPassword(ctx, password, salt, kdfParams, keySize)
+}
+
+func (v *Vault) deriveEncryptionKey(ctx context.Context, password []byte, salt []byte, kdfParams *krypto.Argon2idParams, keySize uint32) (krypto.Krypto, error) {
+	v.logger.Debug("deriving encryption key", slog.Group("key.encryption",
+		slog.String("alg", "chacha20poly1305"),
+		slog.Int("size", int(keySize)),
+		slog.Int("salt.size", len(salt)),
+		slog.Group("argon2id",
+			slog.Int("memory_kib", int(kdfParams.MemoryKiB)),
+			slog.Int("num_iterations", int(kdfParams.NumIterations)),
+			slog.Int("num_threads", int(kdfParams.NumThreads)),
+		)),
+	)
+
+	key, err := krypto.DeriveKeyFromPassword(ctx, password, salt, kdfParams, keySize)
+	if err != nil {
+		return nil, &VaultFileError{
+			Err:   fmt.Errorf("%w: %v", ErrKeyDerivationFailed, err),
+			Field: "encryption_key",
+			Value: nil,
+		}
+	}
+
+	cipher, err := krypto.NewChaCha20Crypto(key)
+	if err != nil {
+		return nil, &VaultFileError{
+			Err:   fmt.Errorf("%w: failed to initialize cipher: %v", ErrKeyDerivationFailed, err),
+			Field: "cipher",
+			Value: nil,
+		}
+	}
+	return cipher, nil
 }

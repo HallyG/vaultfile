@@ -7,11 +7,11 @@ import (
 )
 
 func ReadCipherText(r io.Reader, header *Header) ([]byte, error) {
-	if header.TotalPayloadLength < uint16(totalHeaderLen) {
-		return nil, fmt.Errorf("total payload length %d is smaller than header length %d", header.TotalPayloadLength, totalHeaderLen)
+	if header.TotalPayloadLength < uint16(TotalHeaderLen) {
+		return nil, fmt.Errorf("total payload length %d is smaller than header length %d", header.TotalPayloadLength, TotalHeaderLen)
 	}
 
-	cipherTextLen := int(header.TotalPayloadLength) - totalHeaderLen
+	cipherTextLen := int(header.TotalPayloadLength) - TotalHeaderLen
 	if cipherTextLen < 0 {
 		cipherTextLen = 0
 	}
@@ -23,6 +23,11 @@ func ReadCipherText(r io.Reader, header *Header) ([]byte, error) {
 		}
 
 		return nil, fmt.Errorf("failed to read ciphertext: %w", err)
+	}
+
+	totalLen := uint16(TotalHeaderLen + len(cipherText))
+	if uint16(TotalHeaderLen+len(cipherText)) != header.TotalPayloadLength {
+		return nil, fmt.Errorf("file truncated: expected %d bytes, read %d", header.TotalPayloadLength, totalLen)
 	}
 
 	return cipherText, nil

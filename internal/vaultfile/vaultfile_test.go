@@ -6,17 +6,38 @@ import (
 	"math"
 	"testing"
 
+	"github.com/HallyG/vaultfile/internal/format"
 	"github.com/HallyG/vaultfile/internal/testlog"
 	"github.com/stretchr/testify/require"
 )
 
 func TestV1Format(t *testing.T) {
+	t.Run("error when nil writer", func(t *testing.T) {
+		t.Parallel()
+
+		vault, err := New()
+		require.NoError(t, err)
+
+		err = vault.Encrypt(t.Context(), nil, []byte("password"), []byte("test"))
+		require.ErrorIs(t, err, ErrNilWriter)
+	})
+
+	t.Run("error when nil reader", func(t *testing.T) {
+		t.Parallel()
+
+		vault, err := New()
+		require.NoError(t, err)
+
+		_, err = vault.Decrypt(t.Context(), nil, []byte("password"))
+		require.ErrorIs(t, err, ErrNilReader)
+	})
+
 	t.Run("version is v1", func(t *testing.T) {
 		t.Parallel()
 		vault, err := New()
 		require.NoError(t, err)
 
-		require.Equal(t, VersionV1, vault.Version())
+		require.Equal(t, format.VersionV1, vault.Version())
 	})
 
 	setup := func(t *testing.T, plainText []byte) (*Vault, []byte, []byte, []byte) {
@@ -47,17 +68,7 @@ func TestV1Format(t *testing.T) {
 		require.Equal(t, plainText, decrypted)
 	})
 
-	t.Run("error when decrypt with wrong password", func(t *testing.T) {
-		t.Parallel()
-
-		vault, cipherText, _, _ := setup(t, []byte("hello, world!"))
-
-		decrypted, err := vault.Decrypt(t.Context(), bytes.NewReader(cipherText), []byte("wrong-password"))
-		require.ErrorContains(t, err, "invalid HMAC")
-		require.Empty(t, decrypted)
-	})
-
-	t.Run("empty plaintext", func(t *testing.T) {
+	t.Run("success encrypt and decrypt when empty plaintext", func(t *testing.T) {
 		t.Parallel()
 
 		vault, cipherText, _, password := setup(t, []byte{})
@@ -67,24 +78,14 @@ func TestV1Format(t *testing.T) {
 		require.Empty(t, decrypted)
 	})
 
-	t.Run("error when nil writer", func(t *testing.T) {
+	t.Run("error when decrypt with wrong password", func(t *testing.T) {
 		t.Parallel()
 
-		vault, err := New()
-		require.NoError(t, err)
+		vault, cipherText, _, _ := setup(t, []byte("hello, world!"))
 
-		err = vault.Encrypt(t.Context(), nil, []byte("password"), []byte("test"))
-		require.ErrorIs(t, err, ErrNilWriter)
-	})
-
-	t.Run("error when nil reader", func(t *testing.T) {
-		t.Parallel()
-
-		vault, err := New()
-		require.NoError(t, err)
-
-		_, err = vault.Decrypt(t.Context(), nil, []byte("password"))
-		require.ErrorIs(t, err, ErrNilReader)
+		decrypted, err := vault.Decrypt(t.Context(), bytes.NewReader(cipherText), []byte("wrong-password"))
+		require.ErrorContains(t, err, "invalid HMAC")
+		require.Empty(t, decrypted)
 	})
 
 	t.Run("error on encrypt with empty password", func(t *testing.T) {
