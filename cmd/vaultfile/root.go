@@ -40,13 +40,13 @@ func Main(ctx context.Context, args []string, output io.Writer) error {
 	}
 	rootCmd.SetOut(output)
 	rootCmd.SetArgs(args[1:])
-	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Enable verbose logging")
+	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "enable verbose logging")
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 	rootCmd.SilenceUsage = true
 	rootCmd.SilenceErrors = true
 
-	rootCmd.AddCommand(newCommand("decrypt", "Decrypt content from a file", "vaultfile decrypt -input encrypted.vault -output decrypted.txt", decrypt))
-	rootCmd.AddCommand(newCommand("encrypt", "Encrypt content from a file", "vaultfile encrypt -input plaintext.txt -output encrypted.vault", encrypt))
+	rootCmd.AddCommand(newCommand("decrypt", "decrypt content from a file", "vaultfile decrypt --input encrypted.vault --output decrypted.txt", decrypt))
+	rootCmd.AddCommand(newCommand("encrypt", "encrypt content from a file", "vaultfile encrypt --input plaintext.txt --output encrypted.vault", encrypt))
 
 	return rootCmd.ExecuteContext(ctx)
 }
