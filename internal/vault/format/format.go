@@ -99,11 +99,6 @@ func ParseHeader(input io.Reader) (*Header, io.Reader, error) {
 	}
 	header.CipherTextKeyKDFParams = *kdfParams
 
-	if r == input {
-		return &header, r, nil
-	}
-
-	// Otherwise, unwind the bufio overread and return the unbuffered input.
 	buf, err := r.Peek(r.Buffered())
 	if err != nil {
 		return nil, nil, fmt.Errorf("internal error: %w", err)
@@ -187,6 +182,27 @@ func ValidateMAC(header *Header, mac hash.Hash) error {
 	}
 
 	return nil
+}
+
+// ReadCipherText ...
+// ReadCipherText returns an error if the cipher text is not the expected size
+func ReadCipherText(r io.Reader, header *Header) ([]byte, error) {
+	if header.TotalPayloadLength < uint16(TotalHeaderLen) {
+		return nil, fmt.Errorf("total payload length %d is smaller than header length %d", header.TotalPayloadLength, TotalHeaderLen)
+	}
+
+	cipherTextLen := header.TotalPayloadLength - uint16(TotalHeaderLen)
+	cipherText := make([]byte, cipherTextLen)
+
+	if n, err := io.ReadFull(r, cipherText); err != nil {
+		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+			return nil, fmt.Errorf("file truncated: expected %d bytes, read %d: %w", cipherTextLen, n, err)
+		}
+
+		return nil, fmt.Errorf("failed to read ciphertext: %w", err)
+	}
+
+	return cipherText, nil
 }
 
 // KDFParams represents Argon2id parameters
