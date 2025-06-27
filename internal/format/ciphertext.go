@@ -19,15 +19,10 @@ func ReadCipherText(r io.Reader, header *Header) ([]byte, error) {
 	cipherText := make([]byte, cipherTextLen)
 	if n, err := io.ReadFull(r, cipherText); err != nil {
 		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
-			return nil, fmt.Errorf("incomplete ciphertext, expected %d bytes, read %d: %w", cipherTextLen, n, err)
+			return nil, fmt.Errorf("file truncated: expected %d bytes, read %d: %w", cipherTextLen, n, err)
 		}
 
 		return nil, fmt.Errorf("failed to read ciphertext: %w", err)
-	}
-
-	totalLen := uint16(TotalHeaderLen + len(cipherText))
-	if uint16(TotalHeaderLen+len(cipherText)) != header.TotalPayloadLength {
-		return nil, fmt.Errorf("file truncated: expected %d bytes, read %d", header.TotalPayloadLength, totalLen)
 	}
 
 	return cipherText, nil
