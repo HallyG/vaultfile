@@ -158,6 +158,34 @@ func TestPromptPassword(t *testing.T) {
 		require.Empty(t, password)
 		require.Nil(t, reader.prompts)
 	})
+
+	t.Run("error when empty password input", func(t *testing.T) {
+		t.Parallel()
+
+		output := &bytes.Buffer{}
+		reader := &MockTerminal{
+			inputs:     [][]byte{[]byte("")},
+			isTerminal: true,
+		}
+
+		password, err := passwordutil.PromptPassword(reader, output, false)
+		require.Error(t, err)
+		require.Empty(t, password)
+		require.Contains(t, err.Error(), "password cannot be empty")
+	})
+
+	t.Run("nil output writer", func(t *testing.T) {
+		t.Parallel()
+
+		reader := &MockTerminal{
+			isTerminal: true,
+		}
+
+		password, err := passwordutil.PromptPassword(reader, nil, false)
+		require.Error(t, err)
+		require.Empty(t, password)
+		require.Contains(t, err.Error(), "output writer cannot be nil")
+	})
 }
 
 func TestZeroPassword(t *testing.T) {
