@@ -129,16 +129,21 @@ func processContent(ctx context.Context, input string, output string, force bool
 	}
 	defer ZeroPassword(password)
 
-	v, err := vault.New(vault.WithLogger(slog.Default()))
+	logger := slog.Default()
+	v, err := vault.New(vault.WithLogger(logger))
 	if err != nil {
 		return fmt.Errorf("failed to create vault: %w", err)
 	}
 
-	w, closer, err := openOutput(output, force)
+	w, close, err := openOutput(output, force)
 	if err != nil {
 		return fmt.Errorf("failed to open output: %w", err)
 	}
-	defer closer()
+	defer func() {
+		if err := close(); err != nil {
+			logger.ErrorContext(ctx, "failed to close file", slog.String("file", output))
+		}
+	}()
 
 	return pf(ctx, v, inputBytes, password, w)
 }
