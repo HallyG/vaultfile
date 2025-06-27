@@ -38,7 +38,7 @@ func Main(ctx context.Context, args []string, output io.Writer) error {
 			return nil
 		},
 	}
-	rootCmd.SetOut(output)
+	rootCmd.SetErr(output)
 	rootCmd.SetArgs(args[1:])
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "enable verbose logging")
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
