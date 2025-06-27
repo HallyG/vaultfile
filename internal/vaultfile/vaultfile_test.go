@@ -103,6 +103,7 @@ func TestV1Format(t *testing.T) {
 		var buf bytes.Buffer
 		err = vault.Encrypt(t.Context(), &buf, password, make([]byte, math.MaxUint16))
 		require.ErrorContains(t, err, "ciphertext must be smaller than 65535 bytes")
+
 	})
 }
 

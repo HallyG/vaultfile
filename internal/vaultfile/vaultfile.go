@@ -83,7 +83,6 @@ func (v *Vault) Version() Version {
 	return VersionV1
 }
 
-// TODO: validate maximum plaintext size
 func (v *Vault) Encrypt(ctx context.Context, w io.Writer, password []byte, plainText []byte) error {
 	if w == nil {
 		return &VaultFileError{
