@@ -1,4 +1,4 @@
-package chacha
+package krypto
 
 import (
 	"context"
@@ -6,15 +6,12 @@ import (
 	"crypto/rand"
 	"fmt"
 
-	"github.com/HallyG/vaultfile/internal/krypto"
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
-var _ krypto.Krypto = (*ChaCha20Crypto)(nil)
-
 const (
-	KeySize   = chacha20poly1305.KeySize
-	NonceSize = chacha20poly1305.NonceSizeX
+	ChaCha20KeySize   = chacha20poly1305.KeySize
+	ChaCha20NonceSize = chacha20poly1305.NonceSizeX
 )
 
 type ChaCha20Crypto struct {
@@ -22,7 +19,7 @@ type ChaCha20Crypto struct {
 }
 
 // New creates a new XChaCha20-Poly1305 cipher with the given key.
-func New(key []byte) (*ChaCha20Crypto, error) {
+func NewChaCha20Crypto(key []byte) (*ChaCha20Crypto, error) {
 	cipher, err := chacha20poly1305.NewX(key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cipher: %w", err)

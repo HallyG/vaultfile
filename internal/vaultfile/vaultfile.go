@@ -8,8 +8,7 @@ import (
 	"io"
 	"log/slog"
 
-	"github.com/HallyG/vaultfile/internal/krypto/chacha"
-	"github.com/HallyG/vaultfile/internal/krypto/key"
+	"github.com/HallyG/vaultfile/internal/krypto"
 )
 
 type Version uint8
@@ -51,7 +50,7 @@ func (v Version) String() string {
 
 type Vault struct {
 	logger    *slog.Logger
-	kdfParams *key.Argon2idParams
+	kdfParams *krypto.Argon2idParams
 }
 
 func WithLogger(logger *slog.Logger) func(*Vault) {
@@ -62,7 +61,7 @@ func WithLogger(logger *slog.Logger) func(*Vault) {
 
 func New(opts ...func(*Vault)) (*Vault, error) {
 	v := &Vault{
-		kdfParams: key.DefaultArgon2idParams(),
+		kdfParams: krypto.DefaultArgon2idParams(),
 	}
 
 	for _, opt := range opts {
@@ -93,9 +92,9 @@ func (v *Vault) Encrypt(ctx context.Context, w io.Writer, password []byte, plain
 	}
 
 	v.logger.Debug("encrypting data", slog.Int("plaintext.size", len(plainText)))
+	v.logger.Debug("generating salt", slog.Int("salt.size", krypto.MinSaltLength))
 
-	v.logger.Debug("generating salt", slog.Int("salt.size", key.MinSaltLength))
-	salt, err := key.GenerateSalt(key.MinSaltLength)
+	salt, err := krypto.GenerateSalt(krypto.MinSaltLength)
 	if err != nil {
 		return &VaultFileError{
 			Err:   fmt.Errorf("failed to generate salt: %w", err),
@@ -104,7 +103,7 @@ func (v *Vault) Encrypt(ctx context.Context, w io.Writer, password []byte, plain
 		}
 	}
 
-	cipher, err := v.deriveEncryptionKey(ctx, password, salt, v.kdfParams, chacha.KeySize)
+	cipher, err := v.deriveEncryptionKey(ctx, password, salt, v.kdfParams, krypto.ChaCha20KeySize)
 	if err != nil {
 		return &VaultFileError{
 			Err:   fmt.Errorf("%w: %v", ErrKeyDerivationFailed, err),
@@ -113,7 +112,7 @@ func (v *Vault) Encrypt(ctx context.Context, w io.Writer, password []byte, plain
 		}
 	}
 
-	hmacKey, err := v.deriveHMACKey(ctx, password, salt, chacha.KeySize)
+	hmacKey, err := v.deriveHMACKey(ctx, password, salt, krypto.ChaCha20KeySize)
 	if err != nil {
 		return &VaultFileError{
 			Err:   fmt.Errorf("%w: %v", ErrKeyDerivationFailed, err),
@@ -194,7 +193,7 @@ func (v *Vault) Decrypt(ctx context.Context, r io.Reader, password []byte) ([]by
 		}
 	}
 
-	plainText, err := v.decrypt(ctx, password, header.salt, header.nonce, parsedKdfParams, cipherText, chacha.KeySize)
+	plainText, err := v.decrypt(ctx, password, header.salt, header.nonce, parsedKdfParams, cipherText, krypto.ChaCha20KeySize)
 	if err != nil {
 		return nil, &VaultFileError{
 			Err:   fmt.Errorf("%w: %v", ErrDecryptionFailed, err),

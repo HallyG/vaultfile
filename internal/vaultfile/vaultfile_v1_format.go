@@ -22,8 +22,6 @@ import (
 	"math"
 
 	"github.com/HallyG/vaultfile/internal/krypto"
-	"github.com/HallyG/vaultfile/internal/krypto/chacha"
-	"github.com/HallyG/vaultfile/internal/krypto/key"
 )
 
 const (
@@ -53,7 +51,7 @@ type VersionV1Header struct {
 	hmac            []byte
 }
 
-func (v *Vault) decrypt(ctx context.Context, password []byte, salt []byte, nonce []byte, kdfParams *key.Argon2idParams, cipherText []byte, keySize uint32) ([]byte, error) {
+func (v *Vault) decrypt(ctx context.Context, password []byte, salt []byte, nonce []byte, kdfParams *krypto.Argon2idParams, cipherText []byte, keySize uint32) ([]byte, error) {
 	cipher, err := v.deriveEncryptionKey(ctx, password, salt, kdfParams, keySize)
 	if err != nil {
 		return nil, err
@@ -62,7 +60,7 @@ func (v *Vault) decrypt(ctx context.Context, password []byte, salt []byte, nonce
 	return cipher.Decrypt(ctx, cipherText, nonce, nil)
 }
 
-func (v *Vault) writeBinary(w io.Writer, salt []byte, nonce []byte, kdfParams *key.Argon2idParams, cipherText []byte, hmacKey []byte) error {
+func (v *Vault) writeBinary(w io.Writer, salt []byte, nonce []byte, kdfParams *krypto.Argon2idParams, cipherText []byte, hmacKey []byte) error {
 	totalFileLength := uint16(versionV1LenHeader) + uint16(len(cipherText))
 
 	header := bytes.NewBuffer(nil)
@@ -257,7 +255,7 @@ func (v *Vault) readCipherText(_ context.Context, r io.Reader, header *VersionV1
 func (v *Vault) computeHMAC(ctx context.Context, password []byte, header *VersionV1Header) ([]byte, error) {
 	v.logger.Debug("verifying header hmac")
 
-	hmacKey, err := v.deriveHMACKey(ctx, password, header.salt, chacha.KeySize)
+	hmacKey, err := v.deriveHMACKey(ctx, password, header.salt, krypto.ChaCha20KeySize)
 	if err != nil {
 		return nil, err
 	}
@@ -310,7 +308,7 @@ func (v *Vault) computeHMAC(ctx context.Context, password []byte, header *Versio
 
 func (v *Vault) deriveHMACKey(ctx context.Context, password []byte, salt []byte, keySize uint32) ([]byte, error) {
 	// We use a predefined argon2id params so prevent a resource exhaustion attack where we'd need to generate the password from header values before we verify them
-	kdfParams := key.DefaultArgon2idParams()
+	kdfParams := krypto.DefaultArgon2idParams()
 	v.logger.Debug("deriving hmac key", slog.Group("key.hmac",
 		slog.Int("size", int(keySize)),
 		slog.Int("salt.size", len(salt)),
@@ -321,10 +319,10 @@ func (v *Vault) deriveHMACKey(ctx context.Context, password []byte, salt []byte,
 		)),
 	)
 
-	return key.DeriveKeyFromPassword(ctx, password, salt, kdfParams, keySize)
+	return krypto.DeriveKeyFromPassword(ctx, password, salt, kdfParams, keySize)
 }
 
-func (v *Vault) deriveEncryptionKey(ctx context.Context, password []byte, salt []byte, kdfParams *key.Argon2idParams, keySize uint32) (krypto.Krypto, error) {
+func (v *Vault) deriveEncryptionKey(ctx context.Context, password []byte, salt []byte, kdfParams *krypto.Argon2idParams, keySize uint32) (krypto.Krypto, error) {
 	v.logger.Debug("deriving encryption key", slog.Group("key.encryption",
 		slog.String("alg", "chacha20poly1305"),
 		slog.Int("size", int(keySize)),
@@ -336,7 +334,7 @@ func (v *Vault) deriveEncryptionKey(ctx context.Context, password []byte, salt [
 		)),
 	)
 
-	key, err := key.DeriveKeyFromPassword(ctx, password, salt, kdfParams, keySize)
+	key, err := krypto.DeriveKeyFromPassword(ctx, password, salt, kdfParams, keySize)
 	if err != nil {
 		return nil, &VaultFileError{
 			Err:   fmt.Errorf("%w: %v", ErrKeyDerivationFailed, err),
@@ -345,7 +343,7 @@ func (v *Vault) deriveEncryptionKey(ctx context.Context, password []byte, salt [
 		}
 	}
 
-	cipher, err := chacha.New(key)
+	cipher, err := krypto.NewChaCha20Crypto(key)
 	if err != nil {
 		return nil, &VaultFileError{
 			Err:   fmt.Errorf("%w: failed to initialize cipher: %v", ErrKeyDerivationFailed, err),
@@ -356,7 +354,7 @@ func (v *Vault) deriveEncryptionKey(ctx context.Context, password []byte, salt [
 	return cipher, nil
 }
 
-func (v *Vault) writeKDFParams(w io.Writer, kdfParams *key.Argon2idParams) error {
+func (v *Vault) writeKDFParams(w io.Writer, kdfParams *krypto.Argon2idParams) error {
 	v.logger.Debug("writing encryption key kdf params", slog.Group("key.encryption",
 		slog.Group("argon2id",
 			slog.Int("memory_kib", int(kdfParams.MemoryKiB)),
@@ -389,7 +387,7 @@ func (v *Vault) writeKDFParams(w io.Writer, kdfParams *key.Argon2idParams) error
 	return nil
 }
 
-func (v *Vault) parseKDFParams(ctx context.Context, data []byte) (*key.Argon2idParams, error) {
+func (v *Vault) parseKDFParams(ctx context.Context, data []byte) (*krypto.Argon2idParams, error) {
 	v.logger.Debug("parsing encryption key kdf params")
 
 	if len(data) != versionV1LenKDF {
@@ -404,7 +402,7 @@ func (v *Vault) parseKDFParams(ctx context.Context, data []byte) (*key.Argon2idP
 	numIterations := binary.BigEndian.Uint32(data[4:8])
 	numThreads := uint8(data[8])
 
-	params := &key.Argon2idParams{
+	params := &krypto.Argon2idParams{
 		MemoryKiB:     memoryKiB,
 		NumIterations: numIterations,
 		NumThreads:    numThreads,
