@@ -101,8 +101,8 @@ func (v *Vault) writeBinary(w io.Writer, salt []byte, nonce []byte, kdfParams *k
 
 func (v *Vault) readHeader(_ context.Context, r io.Reader) (*VersionV1Header, error) {
 	header := make([]byte, versionV1LenHeader)
-	n, err := io.ReadFull(r, header)
-	if err != nil {
+
+	if n, err := io.ReadFull(r, header); err != nil {
 		if err == io.EOF || errors.Is(err, io.ErrUnexpectedEOF) {
 			return nil, &VaultFileError{
 				Err:   fmt.Errorf("%w: incomplete header, expected %d bytes, read %d", ErrFileTruncated, versionV1LenHeader, n),
@@ -173,9 +173,9 @@ func (v *Vault) readHeader(_ context.Context, r io.Reader) (*VersionV1Header, er
 func (v *Vault) readCipherText(_ context.Context, r io.Reader, header *VersionV1Header) ([]byte, error) {
 	cipherTextLen := uint32(header.totalFileLength) - uint32(versionV1LenHeader) // TODO: what if file length < len header?
 	cipherText := make([]byte, cipherTextLen)
-	n, err := io.ReadFull(r, cipherText)
-	if err != nil {
-		if err == io.EOF || errors.Is(err, io.ErrUnexpectedEOF) {
+
+	if n, err := io.ReadFull(r, cipherText); err != nil {
+		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 			return nil, &VaultFileError{
 				Err:   fmt.Errorf("%w: incomplete ciphertext, expected %d bytes, read %d", ErrFileTruncated, cipherTextLen, n),
 				Field: "ciphertext",
@@ -259,7 +259,6 @@ func (v *Vault) deriveEncryptionKey(ctx context.Context, password []byte, salt [
 	return cipher, nil
 }
 
-// nolint errcheck
 func (v *Vault) writeKDFParams(w io.Writer, kdfParams *key.Argon2idParams) {
 	v.logger.Debug("writing encryption key kdf params", slog.Group("key.encryption",
 		slog.Group("argon2id",
@@ -269,9 +268,9 @@ func (v *Vault) writeKDFParams(w io.Writer, kdfParams *key.Argon2idParams) {
 		)),
 	)
 
-	binary.Write(w, binary.BigEndian, kdfParams.MemoryKiB)
-	binary.Write(w, binary.BigEndian, kdfParams.NumIterations)
-	w.Write([]byte{kdfParams.NumThreads})
+	_ = binary.Write(w, binary.BigEndian, kdfParams.MemoryKiB)
+	_ = binary.Write(w, binary.BigEndian, kdfParams.NumIterations)
+	_, _ = w.Write([]byte{kdfParams.NumThreads})
 }
 
 func (v *Vault) parseKDFParams(ctx context.Context, data []byte) (*key.Argon2idParams, error) {

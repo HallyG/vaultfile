@@ -73,7 +73,9 @@ func New(opts ...func(*Vault)) (*Vault, error) {
 		v.logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 
-	v.logger = v.logger.WithGroup("vault").With(slog.String("version", VersionV1.String()))
+	v.logger = v.logger.
+		WithGroup("vault").
+		With(slog.String("version", VersionV1.String()))
 	return v, nil
 }
 
