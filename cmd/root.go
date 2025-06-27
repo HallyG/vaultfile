@@ -39,15 +39,12 @@ var (
 	}
 )
 
-func init() {
-	rootCmd.CompletionOptions.DisableDefaultCmd = true
-	rootCmd.SilenceUsage = true
-	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Enable verbose output")
-}
-
 func Main(ctx context.Context, args []string, output io.Writer) error {
 	rootCmd.SetOut(output)
 	rootCmd.SetArgs(args[1:])
+	rootCmd.CompletionOptions.DisableDefaultCmd = true
+	rootCmd.SilenceUsage = true
+	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Enable verbose output")
 
 	return rootCmd.ExecuteContext(ctx)
 }
