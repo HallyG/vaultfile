@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -137,6 +138,42 @@ func Encode(output io.Writer, mac hash.Hash, salt [saltLen]byte, nonce [nonceLen
 
 	if _, err := w.Write(mac.Sum(nil)); err != nil {
 		return fmt.Errorf("failed to write hmac: %w", err)
+	}
+
+	return nil
+}
+
+func ComputeMAC(header *Header, mac hash.Hash) ([]byte, error) {
+	if _, err := mac.Write(header.MagicNumber[:]); err != nil {
+		return nil, fmt.Errorf("failed to write magic to HMAC: %w", err)
+	}
+	if _, err := mac.Write([]byte{byte(header.Version)}); err != nil {
+		return nil, fmt.Errorf("failed to write version to HMAC: %w", err)
+	}
+	if _, err := mac.Write(header.CipherTextKeySalt[:]); err != nil {
+		return nil, fmt.Errorf("failed to write salt to HMAC: %w", err)
+	}
+	if _, err := mac.Write(header.CipherTextKeyNonce[:]); err != nil {
+		return nil, fmt.Errorf("failed to write nonce to HMAC: %w", err)
+	}
+	if _, err := mac.Write(header.CipherTextKeyKDFParams[:]); err != nil {
+		return nil, fmt.Errorf("failed to write KDF params to HMAC: %w", err)
+	}
+	if err := binary.Write(mac, binary.BigEndian, header.TotalPayloadLength); err != nil {
+		return nil, fmt.Errorf("failed to write total file length to HMAC: %w", err)
+	}
+
+	return mac.Sum(nil), nil
+}
+
+func ValidateMAC(header *Header, mac hash.Hash) error {
+	computedHMAC, err := ComputeMAC(header, mac)
+	if err != nil {
+		return err
+	}
+
+	if subtle.ConstantTimeCompare(computedHMAC, header.HMAC[:]) != 1 {
+		return errors.New("invalid HMAC")
 	}
 
 	return nil

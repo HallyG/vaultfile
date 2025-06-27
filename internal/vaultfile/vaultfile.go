@@ -2,7 +2,8 @@ package vaultfile
 
 import (
 	"context"
-	"crypto/subtle"
+	"crypto/hmac"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -144,48 +145,59 @@ func (v *Vault) Encrypt(ctx context.Context, w io.Writer, password []byte, plain
 	return v.writeBinary(w, salt, nonce, v.kdfParams, cipherText, hmacKey)
 }
 
-func (v *Vault) Decrypt(ctx context.Context, r io.Reader, password []byte) ([]byte, error) {
-	if r == nil {
-		return nil, &VaultFileError{
-			Err:   ErrNilReader,
-			Field: "reader",
-			Value: nil,
-		}
+func (v *Vault) Decrypt(ctx context.Context, input io.Reader, password []byte) ([]byte, error) {
+	if input == nil {
+		return nil, &VaultFileError{Err: ErrNilReader, Field: "reader", Value: nil}
 	}
 
 	v.logger.Debug("decrypting data")
 
-	header, r, err := format.Parse(r)
+	header, r, err := format.Parse(input)
 	if err != nil {
 		return nil, fmt.Errorf("reading header: %w", err)
 	}
 
-	parsedKdfParams, err := v.parseKDFParams(ctx, header.CipherTextKeyKDFParams[:])
+	// Parse KDF params using format package
+	kdfParams, err := header.ParseKDFParams()
 	if err != nil {
-		return nil, err
+		return nil, &VaultFileError{Err: err, Field: "kdf_params", Value: nil}
 	}
 
-	computedHMAC, err := v.computeHMAC(ctx, password, header)
-	if err != nil {
-		return nil, err
+	// Convert to internal KDF params type if needed
+	internalKDFParams := &krypto.Argon2idParams{
+		MemoryKiB:     kdfParams.MemoryKiB,
+		NumIterations: kdfParams.NumIterations,
+		NumThreads:    kdfParams.NumThreads,
 	}
 
-	v.logger.Debug("validating header hmac")
-	if subtle.ConstantTimeCompare(computedHMAC, header.HMAC[:]) != 1 {
+	// Validate KDF params
+	if err := internalKDFParams.Validate(ctx); err != nil {
 		return nil, &VaultFileError{
-			Err:   ErrInvalidHeaderHMAC,
-			Field: "hmac",
-			Value: nil,
+			Err:   fmt.Errorf("%w: %v", ErrInvalidKDFParams, err),
+			Field: "argon2id_params",
+			Value: fmt.Sprintf("memory=%d, iterations=%d, threads=%d",
+				kdfParams.MemoryKiB, kdfParams.NumIterations, kdfParams.NumThreads),
 		}
 	}
 
-	v.logger.Debug("reading ciphertext")
-	cipherText, err := v.readCipherText(ctx, r, header)
+	// Derive HMAC key and validate
+	hmacKey, err := v.deriveHMACKey(ctx, password, header.CipherTextKeySalt[:], krypto.ChaCha20KeySize)
 	if err != nil {
 		return nil, err
 	}
 
-	v.logger.Debug("validating expected file size")
+	// Use format package for HMAC validation
+	if err := format.ValidateMAC(header, hmac.New(sha256.New, hmacKey)); err != nil {
+		return nil, &VaultFileError{Err: ErrInvalidHeaderHMAC, Field: "hmac", Value: nil}
+	}
+
+	// Use format package to read ciphertext
+	cipherText, err := format.ReadCipherText(r, header)
+	if err != nil {
+		return nil, &VaultFileError{Err: err, Field: "ciphertext", Value: nil}
+	}
+
+	// Validate total file length
 	totalLen := len(cipherText) + versionV1LenHeader
 	if uint16(totalLen) != header.TotalPayloadLength {
 		return nil, &VaultFileError{
@@ -195,7 +207,8 @@ func (v *Vault) Decrypt(ctx context.Context, r io.Reader, password []byte) ([]by
 		}
 	}
 
-	plainText, err := v.decrypt(ctx, password, header.CipherTextKeySalt[:], header.CipherTextKeyNonce[:], parsedKdfParams, cipherText, krypto.ChaCha20KeySize)
+	// Decrypt
+	plainText, err := v.decrypt(ctx, password, header.CipherTextKeySalt[:], header.CipherTextKeyNonce[:], internalKDFParams, cipherText, krypto.ChaCha20KeySize)
 	if err != nil {
 		return nil, &VaultFileError{
 			Err:   fmt.Errorf("%w: %v", ErrDecryptionFailed, err),
