@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/HallyG/vaultfile/cmd"
+	cmd "github.com/HallyG/vaultfile/cmd/vaultfile"
 )
 
 func main() {

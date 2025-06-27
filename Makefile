@@ -6,7 +6,7 @@ PWD := $(shell pwd)
 BUILD_DIR := ${PWD}/build
 
 GO_CMD ?= go
-GO_LDFLAGS ?= -s -w -buildid= -X 'github.com/HallyG/${APP_NAME}/cmd.BuildShortSHA=$(BUILD_SHORT_SHA)' -X 'github.com/HallyG/${APP_NAME}/cmd.BuildVersion=$(BUILD_VERSION)'
+GO_LDFLAGS ?= -s -w -buildid= -X 'github.com/HallyG/${APP_NAME}/cmd/vaultfile.BuildShortSHA=$(BUILD_SHORT_SHA)' -X 'github.com/HallyG/${APP_NAME}/cmd/vaultfile.BuildVersion=$(BUILD_VERSION)'
 GO_PKG_MAIN := ${PWD}/main.go
 GO_PKGS := $(PWD)/internal/... $(PWD)/cmd/... 
 GO_COVERAGE_FILE := $(BUILD_DIR)/cover.out
