@@ -13,6 +13,10 @@ import (
 
 type Version uint8
 
+func (v Version) String() string {
+	return fmt.Sprintf("v%d", v)
+}
+
 const (
 	VersionUnknown Version = 0
 )
@@ -42,10 +46,6 @@ func (e *VaultFileError) Error() string {
 
 func (e *VaultFileError) Unwrap() error {
 	return e.Err
-}
-
-func (v Version) String() string {
-	return fmt.Sprintf("v%d", v)
 }
 
 type Vault struct {
