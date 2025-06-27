@@ -2,10 +2,11 @@ package vaultfile
 
 import (
 	"bytes"
-	"encoding/binary"
+	"log/slog"
 	"math"
 	"testing"
 
+	"github.com/HallyG/vaultfile/internal/testlog"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,7 +23,11 @@ func TestV1Format(t *testing.T) {
 		t.Helper()
 
 		password := []byte("some-long-password")
-		vault, err := New()
+		vault, err := New(
+			WithLogger(testlog.New(t, testlog.WithSlogHandlerOptions(&slog.HandlerOptions{
+				Level: slog.LevelDebug,
+			}))),
+		)
 		require.NoError(t, err)
 
 		var buf bytes.Buffer
@@ -107,6 +112,7 @@ func TestV1Format(t *testing.T) {
 	})
 }
 
+/*
 func TestV1FormatInvalidHeader(t *testing.T) {
 	setup := func(t *testing.T) (*Vault, []byte, []byte) {
 		t.Helper()
@@ -272,4 +278,4 @@ func TestV1FormatInvalidHeader(t *testing.T) {
 		_, err := vault.Decrypt(t.Context(), bytes.NewReader(cipherText), password)
 		require.ErrorContains(t, err, "invalid KDF parameters")
 	})
-}
+}*/

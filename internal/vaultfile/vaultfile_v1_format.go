@@ -21,6 +21,7 @@ import (
 	"log/slog"
 	"math"
 
+	"github.com/HallyG/vaultfile/internal/format"
 	"github.com/HallyG/vaultfile/internal/krypto"
 )
 
@@ -41,16 +42,6 @@ const (
 	versionV1MaxCipherTextSize          = math.MaxUint16
 )
 
-type VersionV1Header struct {
-	magic           []byte
-	version         Version
-	salt            []byte
-	nonce           []byte
-	kdfParams       []byte
-	totalFileLength uint16
-	hmac            []byte
-}
-
 func (v *Vault) decrypt(ctx context.Context, password []byte, salt []byte, nonce []byte, kdfParams *krypto.Argon2idParams, cipherText []byte, keySize uint32) ([]byte, error) {
 	cipher, err := v.deriveEncryptionKey(ctx, password, salt, kdfParams, keySize)
 	if err != nil {
@@ -61,70 +52,19 @@ func (v *Vault) decrypt(ctx context.Context, password []byte, salt []byte, nonce
 }
 
 func (v *Vault) writeBinary(w io.Writer, salt []byte, nonce []byte, kdfParams *krypto.Argon2idParams, cipherText []byte, hmacKey []byte) error {
-	totalFileLength := uint16(versionV1LenHeader) + uint16(len(cipherText))
-
-	header := bytes.NewBuffer(nil)
-	header.Grow(versionV1LenHeader)
-	mac := hmac.New(sha256.New, hmacKey)
-	writer := io.MultiWriter(header, mac)
-
-	if _, err := writer.Write([]byte(VersionV1MagicNumber)); err != nil {
-		return &VaultFileError{
-			Err:   fmt.Errorf("failed to write magic number: %w", err),
-			Field: "magic_number",
-			Value: nil,
-		}
-	}
-
-	if _, err := writer.Write([]byte{byte(VersionV1)}); err != nil {
-		return &VaultFileError{
-			Err:   fmt.Errorf("failed to write version: %w", err),
-			Field: "version",
-			Value: nil,
-		}
-	}
-
-	if _, err := writer.Write(salt); err != nil {
-		return &VaultFileError{
-			Err:   fmt.Errorf("failed to write salt: %w", err),
-			Field: "salt",
-			Value: nil,
-		}
-	}
-
-	if _, err := writer.Write(nonce); err != nil {
-		return &VaultFileError{
-			Err:   fmt.Errorf("failed to write nonce: %w", err),
-			Field: "nonce",
-			Value: nil,
-		}
-	}
-
-	if err := v.writeKDFParams(writer, kdfParams); err != nil {
+	kdfParamsArr := bytes.NewBuffer(nil)
+	if err := v.writeKDFParams(kdfParamsArr, kdfParams); err != nil {
 		return err
 	}
 
-	if err := binary.Write(writer, binary.BigEndian, totalFileLength); err != nil {
-		return &VaultFileError{
-			Err:   fmt.Errorf("failed to write total file length: %w", err),
-			Field: "total_file_length",
-			Value: nil,
-		}
-	}
-
-	_, _ = header.Write(mac.Sum(nil))
-
-	if _, err := w.Write(header.Bytes()); err != nil {
-		return &VaultFileError{
-			Err:   fmt.Errorf("failed to write header: %w, expected %d bytes", err, versionV1LenHeader),
-			Field: "header",
-			Value: nil,
-		}
+	mac := hmac.New(sha256.New, hmacKey)
+	if err := format.Encode(w, mac, [16]byte(salt), [24]byte(nonce), [9]byte(kdfParamsArr.Bytes()), uint16(len(cipherText))); err != nil {
+		return err
 	}
 
 	if _, err := w.Write(cipherText); err != nil {
 		return &VaultFileError{
-			Err:   fmt.Errorf("failed to write ciphertext: %w, expected %d bytes", err, len(cipherText)),
+			Err:   fmt.Errorf("failed to write ciphertext: %w", err),
 			Field: "ciphertext",
 			Value: nil,
 		}
@@ -133,102 +73,16 @@ func (v *Vault) writeBinary(w io.Writer, salt []byte, nonce []byte, kdfParams *k
 	return nil
 }
 
-func (v *Vault) readHeader(_ context.Context, r io.Reader) (*VersionV1Header, error) {
-	var headerBuf [versionV1LenHeader]byte
-	header := headerBuf[:]
-
-	if n, err := io.ReadFull(r, header); err != nil {
-		if err == io.EOF || errors.Is(err, io.ErrUnexpectedEOF) {
-			return nil, &VaultFileError{
-				Err:   fmt.Errorf("%w: incomplete header, expected %d bytes, read %d", ErrFileTruncated, versionV1LenHeader, n),
-				Field: "header",
-				Value: n,
-			}
-		}
+func (v *Vault) readCipherText(_ context.Context, r io.Reader, header *format.Header) ([]byte, error) {
+	if header.TotalPayloadLength < uint16(versionV1LenHeader) {
 		return nil, &VaultFileError{
-			Err:   fmt.Errorf("failed to read header: %w, expected %d bytes", err, versionV1LenHeader),
-			Field: "header",
-			Value: nil,
-		}
-	}
-
-	start := 0
-	end := versionV1LenMagicNumber
-	magic := header[start:end]
-	if !bytes.Equal(magic, []byte(VersionV1MagicNumber)) {
-		return nil, &VaultFileError{
-			Err:   fmt.Errorf("%w: expected %q, got %q", ErrInvalidHeader, VersionV1MagicNumber, magic),
-			Field: "magic",
-			Value: string(magic),
-		}
-	}
-
-	start = end
-	end = start + versionV1LenVersion
-	version := Version(header[start])
-	if version != VersionV1 {
-		return nil, &VaultFileError{
-			Err:   fmt.Errorf("%w: expected version %d, got %d", ErrInvalidHeader, VersionV1, version),
-			Field: "version",
-			Value: version,
-		}
-	}
-
-	start = end
-	end = start + versionV1LenSalt
-	salt := header[start:end]
-
-	start = end
-	end = start + versionV1LenNonce
-	nonce := header[start:end]
-
-	start = end
-	end = start + versionV1LenKDF
-	kdfParams := header[start:end]
-
-	start = end
-	end = start + versionV1LenTotalFileLength
-	if end > len(header) {
-		return nil, &VaultFileError{
-			Err:   fmt.Errorf("%w: header too short for total file length field", ErrInvalidHeader),
-			Field: "header_length",
-			Value: len(header),
-		}
-	}
-	totalFileLength := binary.BigEndian.Uint16(header[start:end])
-
-	start = end
-	end = start + versionV1LenHMAC
-	if end > len(header) {
-		return nil, &VaultFileError{
-			Err:   fmt.Errorf("%w: header too short for HMAC field", ErrInvalidHeader),
-			Field: "header_length",
-			Value: len(header),
-		}
-	}
-	hmac := header[start:end]
-
-	return &VersionV1Header{
-		magic:           magic,
-		version:         version,
-		totalFileLength: totalFileLength,
-		salt:            salt,
-		nonce:           nonce,
-		kdfParams:       kdfParams,
-		hmac:            hmac,
-	}, nil
-}
-
-func (v *Vault) readCipherText(_ context.Context, r io.Reader, header *VersionV1Header) ([]byte, error) {
-	if header.totalFileLength < uint16(versionV1LenHeader) {
-		return nil, &VaultFileError{
-			Err:   fmt.Errorf("%w: total file length %d is smaller than header length %d", ErrInvalidHeader, header.totalFileLength, versionV1LenHeader),
+			Err:   fmt.Errorf("%w: total file length %d is smaller than header length %d", ErrInvalidHeader, header.TotalPayloadLength, versionV1LenHeader),
 			Field: "total_file_length",
-			Value: header.totalFileLength,
+			Value: header.TotalPayloadLength,
 		}
 	}
 
-	cipherTextLen := int(header.totalFileLength) - versionV1LenHeader
+	cipherTextLen := int(header.TotalPayloadLength) - versionV1LenHeader
 	if cipherTextLen < 0 {
 		cipherTextLen = 0
 	}
@@ -252,51 +106,51 @@ func (v *Vault) readCipherText(_ context.Context, r io.Reader, header *VersionV1
 	return cipherText, nil
 }
 
-func (v *Vault) computeHMAC(ctx context.Context, password []byte, header *VersionV1Header) ([]byte, error) {
+func (v *Vault) computeHMAC(ctx context.Context, password []byte, header *format.Header) ([]byte, error) {
 	v.logger.Debug("verifying header hmac")
 
-	hmacKey, err := v.deriveHMACKey(ctx, password, header.salt, krypto.ChaCha20KeySize)
+	hmacKey, err := v.deriveHMACKey(ctx, password, header.CipherTextKeySalt[:], krypto.ChaCha20KeySize)
 	if err != nil {
 		return nil, err
 	}
 
 	mac := hmac.New(sha256.New, hmacKey)
-	if _, err := mac.Write(header.magic); err != nil {
+	if _, err := mac.Write(header.MagicNumber[:]); err != nil {
 		return nil, &VaultFileError{
 			Err:   fmt.Errorf("failed to write magic to HMAC: %w", err),
 			Field: "hmac_magic",
 			Value: nil,
 		}
 	}
-	if _, err := mac.Write([]byte{byte(header.version)}); err != nil {
+	if _, err := mac.Write([]byte{byte(header.Version)}); err != nil {
 		return nil, &VaultFileError{
 			Err:   fmt.Errorf("failed to write version to HMAC: %w", err),
 			Field: "hmac_version",
 			Value: nil,
 		}
 	}
-	if _, err := mac.Write(header.salt); err != nil {
+	if _, err := mac.Write(header.CipherTextKeySalt[:]); err != nil {
 		return nil, &VaultFileError{
 			Err:   fmt.Errorf("failed to write salt to HMAC: %w", err),
 			Field: "hmac_salt",
 			Value: nil,
 		}
 	}
-	if _, err := mac.Write(header.nonce); err != nil {
+	if _, err := mac.Write(header.CipherTextKeyNonce[:]); err != nil {
 		return nil, &VaultFileError{
 			Err:   fmt.Errorf("failed to write nonce to HMAC: %w", err),
 			Field: "hmac_nonce",
 			Value: nil,
 		}
 	}
-	if _, err := mac.Write(header.kdfParams); err != nil {
+	if _, err := mac.Write(header.CipherTextKeyKDFParams[:]); err != nil {
 		return nil, &VaultFileError{
 			Err:   fmt.Errorf("failed to write KDF params to HMAC: %w", err),
 			Field: "hmac_kdf_params",
 			Value: nil,
 		}
 	}
-	if err := binary.Write(mac, binary.BigEndian, header.totalFileLength); err != nil {
+	if err := binary.Write(mac, binary.BigEndian, header.TotalPayloadLength); err != nil {
 		return nil, &VaultFileError{
 			Err:   fmt.Errorf("failed to write total file length to HMAC: %w", err),
 			Field: "hmac_total_length",

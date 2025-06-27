@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 
+	"github.com/HallyG/vaultfile/internal/format"
 	"github.com/HallyG/vaultfile/internal/krypto"
 )
 
@@ -154,12 +155,12 @@ func (v *Vault) Decrypt(ctx context.Context, r io.Reader, password []byte) ([]by
 
 	v.logger.Debug("decrypting data")
 
-	header, err := v.readHeader(ctx, r)
+	header, r, err := format.Parse(r)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("reading header: %w", err)
 	}
 
-	parsedKdfParams, err := v.parseKDFParams(ctx, header.kdfParams)
+	parsedKdfParams, err := v.parseKDFParams(ctx, header.CipherTextKeyKDFParams[:])
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +171,7 @@ func (v *Vault) Decrypt(ctx context.Context, r io.Reader, password []byte) ([]by
 	}
 
 	v.logger.Debug("validating header hmac")
-	if subtle.ConstantTimeCompare(computedHMAC, header.hmac) != 1 {
+	if subtle.ConstantTimeCompare(computedHMAC, header.HMAC[:]) != 1 {
 		return nil, &VaultFileError{
 			Err:   ErrInvalidHeaderHMAC,
 			Field: "hmac",
@@ -178,6 +179,7 @@ func (v *Vault) Decrypt(ctx context.Context, r io.Reader, password []byte) ([]by
 		}
 	}
 
+	v.logger.Debug("reading ciphertext")
 	cipherText, err := v.readCipherText(ctx, r, header)
 	if err != nil {
 		return nil, err
@@ -185,15 +187,15 @@ func (v *Vault) Decrypt(ctx context.Context, r io.Reader, password []byte) ([]by
 
 	v.logger.Debug("validating expected file size")
 	totalLen := len(cipherText) + versionV1LenHeader
-	if uint16(totalLen) != header.totalFileLength {
+	if uint16(totalLen) != header.TotalPayloadLength {
 		return nil, &VaultFileError{
-			Err:   fmt.Errorf("%w: expected %d bytes, read %d", ErrFileTruncated, header.totalFileLength, totalLen),
+			Err:   fmt.Errorf("%w: expected %d bytes, read %d", ErrFileTruncated, header.TotalPayloadLength, totalLen),
 			Field: "total_file_length",
 			Value: totalLen,
 		}
 	}
 
-	plainText, err := v.decrypt(ctx, password, header.salt, header.nonce, parsedKdfParams, cipherText, krypto.ChaCha20KeySize)
+	plainText, err := v.decrypt(ctx, password, header.CipherTextKeySalt[:], header.CipherTextKeyNonce[:], parsedKdfParams, cipherText, krypto.ChaCha20KeySize)
 	if err != nil {
 		return nil, &VaultFileError{
 			Err:   fmt.Errorf("%w: %v", ErrDecryptionFailed, err),

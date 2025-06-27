@@ -1,8 +1,15 @@
 package format
 
 import (
+	"bufio"
+	"bytes"
+	"crypto/sha256"
+	"encoding/binary"
+	"errors"
 	"fmt"
+	"hash"
 	"io"
+	"math"
 )
 
 type Version uint8
@@ -12,20 +19,125 @@ func (v Version) String() string {
 }
 
 const (
-	VersionUnknown Version = 0
+	VersionUnknown     Version = 0
+	VersionV1          Version = 1
+	magicNumber                = "HGVF"
+	magicNumberLen             = len(magicNumber)
+	versionLen                 = 1
+	saltLen                    = 16
+	nonceLen                   = 24
+	kdfMemoryLen               = 4
+	kdfIterationsLen           = 4
+	kdfThreadsLen              = 1
+	kdfLen                     = kdfMemoryLen + kdfIterationsLen + kdfThreadsLen
+	totalFileLengthLen         = 2
+	hmacLen                    = sha256.Size
+	totalHeaderLen             = magicNumberLen + versionLen + saltLen + nonceLen + kdfLen + totalFileLengthLen + hmacLen
+	maxCipherTextSize          = math.MaxUint16
 )
 
+const ()
+
 type Header struct {
-	MagicNumber            []byte
+	MagicNumber            [magicNumberLen]byte
 	Version                Version
-	CipherTextKeySalt      []byte
-	CipherTextKeyNonce     []byte
-	CipherTextKeyKDFParams []byte
+	CipherTextKeySalt      [saltLen]byte
+	CipherTextKeyNonce     [nonceLen]byte
+	CipherTextKeyKDFParams [kdfLen]byte
 	TotalPayloadLength     uint16
-	HMAC                   []byte
+	HMAC                   [hmacLen]byte
 }
 
-func Parse(src io.Reader) (*Header, io.Reader, error) {
+func Parse(input io.Reader) (*Header, io.Reader, error) {
+	if input == nil {
+		return nil, nil, errors.New("input reader cannot be nil")
+	}
 
-	return nil, nil, nil
+	var header Header
+	r := bufio.NewReader(input)
+
+	headerBuf := make([]byte, totalHeaderLen)
+	if n, err := io.ReadFull(r, headerBuf); err != nil {
+		if err == io.EOF || errors.Is(err, io.ErrUnexpectedEOF) {
+			return nil, nil, fmt.Errorf("incomplete header, expected %d bytes, read %d: %w", totalHeaderLen, n, err)
+		}
+
+		return nil, nil, fmt.Errorf("failed to read header, expected %d bytes: %w, ", totalHeaderLen, err)
+	}
+
+	offset := 0
+
+	copy(header.MagicNumber[:], headerBuf[offset:offset+magicNumberLen])
+	offset += magicNumberLen
+	if !bytes.Equal(header.MagicNumber[:], []byte(magicNumber)) {
+		return nil, nil, fmt.Errorf("invalid magic number: expected %q, got %q", magicNumber, header.MagicNumber)
+	}
+
+	header.Version = Version(headerBuf[offset])
+	offset += versionLen
+	if header.Version != VersionV1 {
+		return nil, nil, fmt.Errorf("invalid version: expected version %s, got %s", VersionV1, header.Version)
+	}
+
+	copy(header.CipherTextKeySalt[:], headerBuf[offset:offset+saltLen])
+	offset += saltLen
+
+	copy(header.CipherTextKeyNonce[:], headerBuf[offset:offset+nonceLen])
+	offset += nonceLen
+
+	copy(header.CipherTextKeyKDFParams[:], headerBuf[offset:offset+kdfLen])
+	offset += kdfLen
+
+	header.TotalPayloadLength = binary.BigEndian.Uint16(headerBuf[offset : offset+totalFileLengthLen])
+	offset += totalFileLengthLen
+
+	copy(header.HMAC[:], headerBuf[offset:offset+hmacLen])
+
+	if r == input {
+		return &header, r, nil
+	}
+
+	// Otherwise, unwind the bufio overread and return the unbuffered input.
+	buf, err := r.Peek(r.Buffered())
+	if err != nil {
+		return nil, nil, fmt.Errorf("internal error: %w", err)
+	}
+
+	payload := io.MultiReader(bytes.NewReader(buf), input)
+	return &header, payload, nil
+}
+
+func Encode(output io.Writer, mac hash.Hash, salt [saltLen]byte, nonce [nonceLen]byte, kdfParams [kdfLen]byte, cipherTextLen uint16) error {
+	w := io.MultiWriter(output, mac)
+
+	if _, err := w.Write([]byte(magicNumber)); err != nil {
+		return fmt.Errorf("failed to write magic number: %w", err)
+	}
+
+	if _, err := w.Write([]byte{byte(VersionV1)}); err != nil {
+		return fmt.Errorf("failed to write version: %w", err)
+	}
+
+	if _, err := w.Write(salt[:]); err != nil {
+		return fmt.Errorf("failed to write salt: %w", err)
+	}
+
+	if _, err := w.Write(nonce[:]); err != nil {
+		return fmt.Errorf("failed to write nonce: %w", err)
+	}
+
+	if _, err := w.Write(kdfParams[:]); err != nil {
+		return fmt.Errorf("failed to write kdf params: %w", err)
+	}
+
+	totalPayloadLength := uint16(totalHeaderLen) + cipherTextLen
+	if err := binary.Write(w, binary.BigEndian, totalPayloadLength); err != nil {
+		return fmt.Errorf("failed to write total payload length: %w", err)
+	}
+
+	if _, err := w.Write(mac.Sum(nil)); err != nil {
+		return fmt.Errorf("failed to write hmac: %w", err)
+	}
+
+	return nil
 }
