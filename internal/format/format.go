@@ -37,19 +37,18 @@ const (
 	MaxCipherTextSize          = math.MaxUint16
 )
 
-const ()
-
 type Header struct {
-	MagicNumber            [magicNumberLen]byte
-	Version                Version
-	CipherTextKeySalt      [saltLen]byte
-	CipherTextKeyNonce     [nonceLen]byte
-	CipherTextKeyKDFParams [kdfLen]byte
-	TotalPayloadLength     uint16
-	HMAC                   [hmacLen]byte
+	MagicNumber               [magicNumberLen]byte
+	Version                   Version
+	CipherTextKeySalt         [saltLen]byte
+	CipherTextKeyNonce        [nonceLen]byte
+	cipherTextKeyKDFParamsRaw [kdfLen]byte
+	CipherTextKeyKDFParams    KDFParams
+	TotalPayloadLength        uint16
+	HMAC                      [hmacLen]byte
 }
 
-func Parse(input io.Reader) (*Header, io.Reader, error) {
+func ParseHeader(input io.Reader) (*Header, io.Reader, error) {
 	if input == nil {
 		return nil, nil, errors.New("input reader cannot be nil")
 	}
@@ -60,7 +59,7 @@ func Parse(input io.Reader) (*Header, io.Reader, error) {
 	headerBuf := make([]byte, TotalHeaderLen)
 	if n, err := io.ReadFull(r, headerBuf); err != nil {
 		if err == io.EOF || errors.Is(err, io.ErrUnexpectedEOF) {
-			return nil, nil, fmt.Errorf("incomplete header, expected %d bytes, read %d: %w", TotalHeaderLen, n, err)
+			return nil, nil, fmt.Errorf("truncated header, expected %d bytes, read %d: %w", TotalHeaderLen, n, err)
 		}
 
 		return nil, nil, fmt.Errorf("failed to read header, expected %d bytes: %w, ", TotalHeaderLen, err)
@@ -86,13 +85,19 @@ func Parse(input io.Reader) (*Header, io.Reader, error) {
 	copy(header.CipherTextKeyNonce[:], headerBuf[offset:offset+nonceLen])
 	offset += nonceLen
 
-	copy(header.CipherTextKeyKDFParams[:], headerBuf[offset:offset+kdfLen])
+	copy(header.cipherTextKeyKDFParamsRaw[:], headerBuf[offset:offset+kdfLen])
 	offset += kdfLen
 
 	header.TotalPayloadLength = binary.BigEndian.Uint16(headerBuf[offset : offset+totalFileLengthLen])
 	offset += totalFileLengthLen
 
 	copy(header.HMAC[:], headerBuf[offset:offset+hmacLen])
+
+	kdfParams, err := parseKDFParams(header.cipherTextKeyKDFParamsRaw)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to parse kdf params: %w", err)
+	}
+	header.CipherTextKeyKDFParams = *kdfParams
 
 	if r == input {
 		return &header, r, nil
@@ -108,7 +113,7 @@ func Parse(input io.Reader) (*Header, io.Reader, error) {
 	return &header, payload, nil
 }
 
-func Encode(output io.Writer, mac hash.Hash, salt [saltLen]byte, nonce [nonceLen]byte, kdfParams KDFParams, cipherTextLen uint16) error {
+func EncodeHeader(output io.Writer, mac hash.Hash, salt [saltLen]byte, nonce [nonceLen]byte, kdfParams KDFParams, cipherTextLen uint16) error {
 	w := io.MultiWriter(output, mac)
 
 	if _, err := w.Write([]byte(magicNumber)); err != nil {
@@ -127,7 +132,7 @@ func Encode(output io.Writer, mac hash.Hash, salt [saltLen]byte, nonce [nonceLen
 		return fmt.Errorf("failed to write nonce: %w", err)
 	}
 
-	kdfParamsBytes, err := EncodeKDFParams(&kdfParams)
+	kdfParamsBytes, err := encodeKDFParams(&kdfParams)
 	if err != nil {
 		return fmt.Errorf("failed to encode kdf params: %w", err)
 	}
@@ -161,7 +166,7 @@ func ComputeMAC(header *Header, mac hash.Hash) ([]byte, error) {
 	if _, err := mac.Write(header.CipherTextKeyNonce[:]); err != nil {
 		return nil, fmt.Errorf("failed to write nonce to HMAC: %w", err)
 	}
-	if _, err := mac.Write(header.CipherTextKeyKDFParams[:]); err != nil {
+	if _, err := mac.Write(header.cipherTextKeyKDFParamsRaw[:]); err != nil {
 		return nil, fmt.Errorf("failed to write KDF params to HMAC: %w", err)
 	}
 	if err := binary.Write(mac, binary.BigEndian, header.TotalPayloadLength); err != nil {
@@ -182,4 +187,39 @@ func ValidateMAC(header *Header, mac hash.Hash) error {
 	}
 
 	return nil
+}
+
+// KDFParams represents Argon2id parameters
+type KDFParams struct {
+	MemoryKiB     uint32
+	NumIterations uint32
+	NumThreads    uint8
+}
+
+func parseKDFParams(bytes [kdfLen]byte) (*KDFParams, error) {
+	return &KDFParams{
+		MemoryKiB:     binary.BigEndian.Uint32(bytes[0:4]),
+		NumIterations: binary.BigEndian.Uint32(bytes[4:8]),
+		NumThreads:    uint8(bytes[8]),
+	}, nil
+}
+
+func encodeKDFParams(params *KDFParams) ([kdfLen]byte, error) {
+	var result [kdfLen]byte
+	buf := bytes.NewBuffer(nil)
+
+	if err := binary.Write(buf, binary.BigEndian, params.MemoryKiB); err != nil {
+		return result, fmt.Errorf("failed to write KDF memory parameter: %w", err)
+	}
+
+	if err := binary.Write(buf, binary.BigEndian, params.NumIterations); err != nil {
+		return result, fmt.Errorf("failed to write KDF iterations parameter: %w", err)
+	}
+
+	if _, err := buf.Write([]byte{params.NumThreads}); err != nil {
+		return result, fmt.Errorf("failed to write KDF threads parameter: %w", err)
+	}
+
+	copy(result[:], buf.Bytes())
+	return result, nil
 }

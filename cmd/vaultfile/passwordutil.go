@@ -1,4 +1,4 @@
-package passwordutil
+package cmd
 
 import (
 	"bytes"

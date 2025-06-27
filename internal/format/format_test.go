@@ -1,169 +1,347 @@
 package format
 
-/*
-func TestV1FormatInvalidHeader(t *testing.T) {
-	setup := func(t *testing.T) (*Vault, []byte, []byte) {
-		t.Helper()
+import (
+	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/binary"
+	"testing"
 
-		plainText := []byte("hello, world!")
-		password := []byte("some-long-password")
-		vault, err := New()
-		require.NoError(t, err)
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
-		var buf bytes.Buffer
-		err = vault.Encrypt(t.Context(), &buf, password, plainText)
-		require.NoError(t, err)
-
-		return vault, buf.Bytes(), password
-	}
-
-	t.Run("error when header field is tampered", func(t *testing.T) {
-		fields := map[string]struct {
-			modifier func(t *testing.T, vault *Vault, password []byte, header []byte) []byte
-		}{
-			"salt": {
-				modifier: func(t *testing.T, vault *Vault, password []byte, header []byte) []byte {
-					start := versionV1LenMagicNumber + versionV1LenVersion
-					header[start] ^= 0xFF
-					return header
-				},
-			},
-			"nonce": {
-				modifier: func(t *testing.T, vault *Vault, password []byte, header []byte) []byte {
-					start := versionV1LenMagicNumber + versionV1LenVersion + versionV1LenSalt
-					header[start] ^= 0xFF
-					return header
-				},
-			},
-			"kdfParams": {
-				modifier: func(t *testing.T, vault *Vault, password []byte, header []byte) []byte {
-					start := versionV1LenMagicNumber + versionV1LenVersion + versionV1LenSalt + versionV1LenNonce
-					header[start] ^= 0xFF
-					return header
-				},
-			},
-			"totalFileLength": {
-				modifier: func(t *testing.T, vault *Vault, password []byte, header []byte) []byte {
-					start := versionV1LenMagicNumber + versionV1LenVersion + versionV1LenSalt + versionV1LenNonce + versionV1LenKDF
-					binary.BigEndian.PutUint16(header[start:start+versionV1LenTotalFileLength], uint16(versionV1LenHeader-1))
-					return header
-				},
-			},
-		}
-		for name, test := range fields {
-			t.Run(name, func(t *testing.T) {
-				t.Parallel()
-
-				vault, cipherText, password := setup(t)
-				modifiedData := test.modifier(t, vault, password, cipherText)
-
-				_, err := vault.Decrypt(t.Context(), bytes.NewReader(modifiedData), password)
-				require.ErrorContains(t, err, "invalid HMAC")
-			})
-		}
-	})
-
-	tests := map[string]struct {
-		modifier    func(t *testing.T, vault *Vault, password []byte, header []byte) []byte
-		errContains string
+func TestVersionString(t *testing.T) {
+	tests := []struct {
+		version  Version
+		expected string
 	}{
-		"error when invalid magic number": {
-			modifier: func(t *testing.T, vault *Vault, password []byte, header []byte) []byte {
-				t.Helper()
-
-				header[0] = 'X'
-				return header
-			},
-			errContains: `expected "HGVF", got "XGVF"`,
-		},
-		"error when invalid version": {
-			modifier: func(t *testing.T, vault *Vault, password []byte, header []byte) []byte {
-				t.Helper()
-
-				header[versionV1LenMagicNumber] = 99
-				return header
-			},
-			errContains: "expected version 1, got 99",
-		},
-		"error when invalid HMAC": {
-			modifier: func(t *testing.T, vault *Vault, password []byte, header []byte) []byte {
-				t.Helper()
-
-				start := versionV1LenHeader - versionV1LenHMAC
-				header[start] ^= 0xFF // Flip a bit in HMAC
-				return header
-			},
-			errContains: "invalid HMAC",
-		},
-		"error when tampered salt": {
-			modifier: func(t *testing.T, vault *Vault, password []byte, header []byte) []byte {
-				t.Helper()
-
-				start := versionV1LenMagicNumber + versionV1LenVersion
-				header[start] ^= 0xFF // Modify salt, HMAC will be invalid
-				return header
-			},
-			errContains: "invalid HMAC",
-		},
-		"error when truncated header": {
-			modifier: func(t *testing.T, vault *Vault, password []byte, header []byte) []byte {
-				t.Helper()
-
-				return header[:versionV1LenHeader-1]
-			},
-			errContains: "incomplete header",
-		},
-		"error when truncated ciphertext": {
-			modifier: func(t *testing.T, vault *Vault, password []byte, header []byte) []byte {
-				t.Helper()
-
-				return header[:versionV1LenHeader+5] // Partial ciphertext
-			},
-			errContains: "incomplete ciphertext",
-		},
-		"error when invalid totalFileLength (too small)": {
-			modifier: func(t *testing.T, vault *Vault, password []byte, header []byte) []byte {
-				t.Helper()
-
-				start := versionV1LenMagicNumber + versionV1LenVersion + versionV1LenSalt + versionV1LenNonce + versionV1LenKDF
-				binary.BigEndian.PutUint16(header[start:start+versionV1LenTotalFileLength], uint16(999))
-
-				headerData, err := vault.readHeader(t.Context(), bytes.NewReader(header))
-				require.NoError(t, err)
-
-				newHMAC, err := vault.computeHMAC(t.Context(), password, headerData)
-				require.NoError(t, err)
-
-				result := make([]byte, len(header))
-				copy(result, header)
-				copy(result[versionV1LenHeader-versionV1LenHMAC:], newHMAC)
-				return result
-			},
-			errContains: "incomplete ciphertext",
-		},
+		{VersionUnknown, "v0"},
+		{VersionV1, "v1"},
+		{Version(5), "v5"},
 	}
-	for name, test := range tests {
-		t.Run(name, func(t *testing.T) {
+
+	for _, test := range tests {
+		t.Run(test.expected, func(t *testing.T) {
 			t.Parallel()
 
-			vault, cipherText, password := setup(t)
-			modifiedData := test.modifier(t, vault, password, cipherText)
-
-			plaintext, err := vault.Decrypt(t.Context(), bytes.NewReader(modifiedData), password)
-			require.ErrorContains(t, err, test.errContains)
-			require.Nil(t, plaintext)
+			assert.Equal(t, test.expected, test.version.String())
 		})
 	}
+}
 
-	t.Run("invalid KDF parameters", func(t *testing.T) {
+func TestParseHeader(t *testing.T) {
+	t.Run("error when input reader is nil", func(t *testing.T) {
 		t.Parallel()
 
-		vault, cipherText, password := setup(t)
-		start := versionV1LenMagicNumber + versionV1LenVersion + versionV1LenSalt + versionV1LenNonce
-
-		binary.BigEndian.PutUint32(cipherText[start:start+4], 0) // Set MemoryKiB to 0
-
-		_, err := vault.Decrypt(t.Context(), bytes.NewReader(cipherText), password)
-		require.ErrorContains(t, err, "invalid KDF parameters")
+		header, reader, err := ParseHeader(nil)
+		assert.Nil(t, header)
+		assert.Nil(t, reader)
+		assert.EqualError(t, err, "input reader cannot be nil")
 	})
-}*/
+
+	t.Run("error when header is truncated", func(t *testing.T) {
+		t.Parallel()
+
+		data := make([]byte, TotalHeaderLen-1)
+		copy(data, []byte(magicNumber))
+
+		header, reader, err := ParseHeader(bytes.NewReader(data))
+		assert.Nil(t, header)
+		assert.Nil(t, reader)
+		assert.ErrorContains(t, err, "truncated header")
+	})
+
+	t.Run("error when magic number is invalid", func(t *testing.T) {
+		t.Parallel()
+
+		data := make([]byte, TotalHeaderLen)
+		copy(data, []byte("XXXX"))
+		data[magicNumberLen] = byte(VersionV1)
+
+		header, reader, err := ParseHeader(bytes.NewReader(data))
+		assert.Nil(t, header)
+		assert.Nil(t, reader)
+		assert.ErrorContains(t, err, `invalid magic number: expected "HGVF", got "XXXX"`)
+	})
+
+	t.Run("error when version is invalid", func(t *testing.T) {
+		t.Parallel()
+
+		data := make([]byte, TotalHeaderLen)
+		copy(data, []byte(magicNumber))
+		data[magicNumberLen] = 99
+
+		header, reader, err := ParseHeader(bytes.NewReader(data))
+		assert.Nil(t, header)
+		assert.Nil(t, reader)
+		assert.ErrorContains(t, err, "invalid version: expected version v1, got v99")
+	})
+
+	t.Run("successful parse with valid header", func(t *testing.T) {
+		t.Parallel()
+
+		data := createValidHeaderData(t)
+
+		header, reader, err := ParseHeader(bytes.NewReader(data))
+		require.NoError(t, err)
+		require.NotNil(t, header)
+		require.NotNil(t, reader)
+
+		assert.Equal(t, [4]byte{'H', 'G', 'V', 'F'}, header.MagicNumber)
+		assert.Equal(t, VersionV1, header.Version)
+		assert.Equal(t, uint32(65536), header.CipherTextKeyKDFParams.MemoryKiB)
+		assert.Equal(t, uint32(3), header.CipherTextKeyKDFParams.NumIterations)
+		assert.Equal(t, uint8(4), header.CipherTextKeyKDFParams.NumThreads)
+	})
+}
+
+func TestEncodeHeader(t *testing.T) {
+	t.Run("successful encode header", func(t *testing.T) {
+		t.Parallel()
+
+		var buf bytes.Buffer
+		mac := hmac.New(sha256.New, []byte("test-key"))
+
+		salt := [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
+		nonce := [24]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24}
+		kdfParams := KDFParams{
+			MemoryKiB:     65536,
+			NumIterations: 3,
+			NumThreads:    4,
+		}
+
+		err := EncodeHeader(&buf, mac, salt, nonce, kdfParams, 100)
+		require.NoError(t, err)
+
+		data := buf.Bytes()
+		assert.Len(t, data, TotalHeaderLen)
+
+		assert.Equal(t, []byte(magicNumber), data[:magicNumberLen])
+		assert.Equal(t, byte(VersionV1), data[magicNumberLen])
+		assert.Equal(t, salt[:], data[magicNumberLen+versionLen:magicNumberLen+versionLen+saltLen])
+	})
+}
+
+func TestValidateMAC(t *testing.T) {
+	createHeader := func() *Header {
+		return &Header{
+			MagicNumber:               [4]byte{'H', 'G', 'V', 'F'},
+			Version:                   VersionV1,
+			CipherTextKeySalt:         [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			CipherTextKeyNonce:        [24]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24},
+			cipherTextKeyKDFParamsRaw: [9]byte{0, 1, 0, 0, 0, 0, 0, 3, 4},
+			TotalPayloadLength:        200,
+		}
+	}
+
+	t.Run("valid MAC", func(t *testing.T) {
+		t.Parallel()
+
+		header := createHeader()
+		mac := hmac.New(sha256.New, []byte("test-key"))
+		computedMAC, err := ComputeMAC(header, mac)
+		require.NoError(t, err)
+		assert.Len(t, computedMAC, sha256.Size)
+
+		copy(header.HMAC[:], computedMAC)
+
+		mac = hmac.New(sha256.New, []byte("test-key"))
+		err = ValidateMAC(header, mac)
+		assert.NoError(t, err)
+	})
+
+	t.Run("error when invalid MAC", func(t *testing.T) {
+		t.Parallel()
+
+		header := createHeader()
+		header.HMAC = [32]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}
+
+		mac := hmac.New(sha256.New, []byte("test-key"))
+		err := ValidateMAC(header, mac)
+		assert.EqualError(t, err, "invalid HMAC")
+	})
+}
+
+func TestKDFParams(t *testing.T) {
+	t.Run("parse KDF params", func(t *testing.T) {
+		t.Parallel()
+
+		data := [9]byte{}
+		binary.BigEndian.PutUint32(data[0:4], 65536)
+		binary.BigEndian.PutUint32(data[4:8], 3)
+		data[8] = 4
+
+		params, err := parseKDFParams(data)
+		require.NoError(t, err)
+		assert.Equal(t, uint32(65536), params.MemoryKiB)
+		assert.Equal(t, uint32(3), params.NumIterations)
+		assert.Equal(t, uint8(4), params.NumThreads)
+	})
+
+	t.Run("encode KDF params", func(t *testing.T) {
+		t.Parallel()
+
+		params := &KDFParams{
+			MemoryKiB:     65536,
+			NumIterations: 3,
+			NumThreads:    4,
+		}
+
+		encoded, err := encodeKDFParams(params)
+		require.NoError(t, err)
+
+		expected := [9]byte{}
+		binary.BigEndian.PutUint32(expected[0:4], 65536)
+		binary.BigEndian.PutUint32(expected[4:8], 3)
+		expected[8] = 4
+
+		assert.Equal(t, expected, encoded)
+	})
+
+	t.Run("roundtrip encoding and parsing", func(t *testing.T) {
+		t.Parallel()
+
+		original := &KDFParams{
+			MemoryKiB:     32768,
+			NumIterations: 5,
+			NumThreads:    2,
+		}
+
+		encoded, err := encodeKDFParams(original)
+		require.NoError(t, err)
+
+		parsed, err := parseKDFParams(encoded)
+		require.NoError(t, err)
+
+		assert.Equal(t, original, parsed)
+	})
+}
+
+func TestReadCipherText(t *testing.T) {
+	t.Run("successful read", func(t *testing.T) {
+		t.Parallel()
+
+		cipherText := []byte("test ciphertext data")
+		header := &Header{
+			TotalPayloadLength: uint16(TotalHeaderLen + len(cipherText)),
+		}
+
+		result, err := ReadCipherText(bytes.NewReader(cipherText), header)
+		require.NoError(t, err)
+		assert.Equal(t, cipherText, result)
+	})
+
+	t.Run("error when total payload length too small", func(t *testing.T) {
+		t.Parallel()
+
+		header := &Header{
+			TotalPayloadLength: uint16(TotalHeaderLen - 1),
+		}
+
+		result, err := ReadCipherText(bytes.NewReader(nil), header)
+		assert.Nil(t, result)
+		assert.ErrorContains(t, err, "total payload length")
+		assert.ErrorContains(t, err, "is smaller than header length")
+	})
+
+	t.Run("error when ciphertext truncated", func(t *testing.T) {
+		t.Parallel()
+
+		cipherText := []byte("short")
+		header := &Header{
+			TotalPayloadLength: uint16(TotalHeaderLen + 20),
+		}
+
+		result, err := ReadCipherText(bytes.NewReader(cipherText), header)
+		assert.Nil(t, result)
+		assert.ErrorContains(t, err, "file truncated")
+	})
+}
+
+func TestConstants(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, "HGVF", magicNumber)
+	assert.Equal(t, 4, magicNumberLen)
+	assert.Equal(t, 1, versionLen)
+	assert.Equal(t, 16, saltLen)
+	assert.Equal(t, 24, nonceLen)
+	assert.Equal(t, 9, kdfLen)
+	assert.Equal(t, 2, totalFileLengthLen)
+	assert.Equal(t, 32, hmacLen)
+	assert.Equal(t, 88, TotalHeaderLen)
+	assert.Equal(t, 65535, MaxCipherTextSize)
+}
+
+func BenchmarkParse(b *testing.B) {
+	data := createValidHeaderData(b)
+
+	for b.Loop() {
+		if _, _, err := ParseHeader(bytes.NewReader(data)); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkEncode(b *testing.B) {
+	salt := [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
+	nonce := [24]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24}
+	kdfParams := KDFParams{
+		MemoryKiB:     65536,
+		NumIterations: 3,
+		NumThreads:    4,
+	}
+
+	for b.Loop() {
+		var buf bytes.Buffer
+		mac := hmac.New(sha256.New, []byte("test-key"))
+
+		if err := EncodeHeader(&buf, mac, salt, nonce, kdfParams, 100); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func createValidHeaderData(t testing.TB) []byte {
+	t.Helper()
+
+	data := make([]byte, TotalHeaderLen)
+	offset := 0
+
+	copy(data[offset:], []byte(magicNumber))
+	offset += magicNumberLen
+
+	data[offset] = byte(VersionV1)
+	offset += versionLen
+
+	salt := [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
+	copy(data[offset:], salt[:])
+	offset += saltLen
+
+	nonce := [24]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24}
+	copy(data[offset:], nonce[:])
+	offset += nonceLen
+
+	kdfParams := &KDFParams{
+		MemoryKiB:     65536,
+		NumIterations: 3,
+		NumThreads:    4,
+	}
+	kdfBytes, err := encodeKDFParams(kdfParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	copy(data[offset:], kdfBytes[:])
+	offset += kdfLen
+
+	binary.BigEndian.PutUint16(data[offset:], uint16(TotalHeaderLen+100))
+	offset += totalFileLengthLen
+
+	mac := hmac.New(sha256.New, []byte("test-key"))
+	mac.Write(data[:offset])
+	hmacSum := mac.Sum(nil)
+	copy(data[offset:], hmacSum)
+
+	return data
+}

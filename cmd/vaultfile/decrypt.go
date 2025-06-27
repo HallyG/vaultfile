@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/HallyG/vaultfile/internal/passwordutil"
 	"github.com/HallyG/vaultfile/internal/vaultfile"
 	"github.com/spf13/cobra"
 )
@@ -101,11 +100,11 @@ func processContent(ctx context.Context, inputPath, outputPath string, force boo
 		return fmt.Errorf("failed to read input: %w", err)
 	}
 
-	password, err := passwordutil.PromptPassword(nil, os.Stderr, confirmPassword)
+	password, err := PromptPassword(nil, os.Stderr, confirmPassword)
 	if err != nil {
 		return fmt.Errorf("failed to read password: %w", err)
 	}
-	defer passwordutil.ZeroPassword(password)
+	defer ZeroPassword(password)
 
 	v, err := vaultfile.New(vaultfile.WithLogger(slog.Default()))
 	if err != nil {
