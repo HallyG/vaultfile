@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/HallyG/vaultfile/internal/vaultfile"
+	vaultfile "github.com/HallyG/vaultfile/internal/vault"
 	"github.com/spf13/cobra"
 )
 

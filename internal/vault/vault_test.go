@@ -8,7 +8,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/HallyG/vaultfile/internal/format"
+	"github.com/HallyG/vaultfile/internal/vault/format"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

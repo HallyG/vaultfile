@@ -9,8 +9,8 @@ import (
 	"io"
 	"log/slog"
 
-	"github.com/HallyG/vaultfile/internal/format"
 	"github.com/HallyG/vaultfile/internal/krypto"
+	"github.com/HallyG/vaultfile/internal/vault/format"
 )
 
 type Vault struct {

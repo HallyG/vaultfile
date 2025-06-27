@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/HallyG/vaultfile/internal/vaultfile"
+	vaultfile "github.com/HallyG/vaultfile/internal/vault"
 )
 
 func main() {
