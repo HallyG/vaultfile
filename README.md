@@ -39,7 +39,7 @@ This project is intended for educational purposes only and should not be used in
    ```
 
 ## Documentation
-Documentation can be found [here](./docs/vaultfile-v1.md).
+Documentation about the `vaultfile` binary format can be found [here](./docs/vaultfile-v1.md).
 
 ## License
 This project is licensed under the MIT License. See the [LICENSE](./LICENSE) file for details.
