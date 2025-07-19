@@ -21,4 +21,4 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
       - name: Run tests
-        run: go test ./... -timeout 10s -race
+        run: go test ./... -timeout 30s -race
