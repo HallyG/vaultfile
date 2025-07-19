@@ -6,6 +6,7 @@ PWD := $(shell pwd)
 BUILD_DIR := ${PWD}/build
 
 GO_CMD ?= go
+GO_BUILD_TAGS =
 GO_LDFLAGS ?= -s -w -buildid= -X 'github.com/HallyG/${APP_NAME}/cmd/vaultfile.BuildShortSHA=$(BUILD_SHORT_SHA)' -X 'github.com/HallyG/${APP_NAME}/cmd/vaultfile.BuildVersion=$(BUILD_VERSION)'
 GO_PKG_MAIN := ${PWD}/main.go
 GO_PKGS := $(PWD)/internal/... $(PWD)/cmd/... 
@@ -40,7 +41,7 @@ audit: clean
 ## test: run tests
 .PHONY: test
 test:
-	@$(GO_CMD) test -timeout 30s -race $(if $(VERBOSE),-v) ${GO_PKGS}
+	@$(GO_CMD) test ${GO_BUILD_TAGS} -timeout 30s -race $(if $(VERBOSE),-v) ${GO_PKGS}
 
 ## test/cover: run tests with coverage
 .PHONY: test/cover
@@ -55,7 +56,7 @@ test/cover:
 .PHONY: build
 build:
 	@echo "GO_LDFLAGS: $(GO_LDFLAGS)"
-	@$(GO_CMD) build -o ${BUILD_DIR}/${APP_NAME} -trimpath -mod=readonly -ldflags="$(GO_LDFLAGS)" ${GO_PKG_MAIN}
+	@$(GO_CMD) build ${GO_BUILD_TAGS} -o ${BUILD_DIR}/${APP_NAME} -trimpath -mod=readonly -ldflags="$(GO_LDFLAGS)" ${GO_PKG_MAIN}
 
 ## run: run the application	
 .PHONY: run
