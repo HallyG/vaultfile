@@ -41,7 +41,7 @@ audit: clean
 ## test: run tests
 .PHONY: test
 test:
-	@$(GO_CMD) test ${GO_BUILD_TAGS} -timeout 30s -race $(if $(VERBOSE),-v) ${GO_PKGS}
+	@$(GO_CMD) test ${GO_BUILD_TAGS} -timeout 10s -race $(if $(VERBOSE),-v) ${GO_COVERAGE_PKGS}
 
 ## test/cover: run tests with coverage
 .PHONY: test/cover
