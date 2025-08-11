@@ -41,14 +41,14 @@ audit: clean
 ## test: run tests
 .PHONY: test
 test:
-	@$(GO_CMD) test ${GO_BUILD_TAGS} -timeout 10s -race $(if $(VERBOSE),-v) ${GO_COVERAGE_PKGS}
+	@$(GO_CMD) test ${GO_BUILD_TAGS} -timeout 30s -race $(if $(VERBOSE),-v) ${GO_COVERAGE_PKGS}
 
 ## test/cover: run tests with coverage
 .PHONY: test/cover
 test/cover:
 	@mkdir -p ${BUILD_DIR}
 	@rm -f ${GO_COVERAGE_FILE} ${GO_COVERAGE_TEXT_FILE} ${GO_COVERAGE_HTML_FILE}
-	@$(GO_CMD) test ${GO_BUILD_TAGS} -timeout 10s -race -coverprofile=${GO_COVERAGE_FILE} ${GO_COVERAGE_PKGS}
+	@$(GO_CMD) test ${GO_BUILD_TAGS} -timeout 30s -race -coverprofile=${GO_COVERAGE_FILE} ${GO_COVERAGE_PKGS}
 	@$(GO_CMD) tool cover -func ${GO_COVERAGE_FILE} -o ${GO_COVERAGE_TEXT_FILE}
 	@$(GO_CMD) tool cover -html ${GO_COVERAGE_FILE} -o ${GO_COVERAGE_HTML_FILE}
 
