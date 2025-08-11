@@ -1,16 +1,11 @@
-name: Release
+name: Pull Request
 
 on:
-  push:
+  pull_request:
     branches: [master]
-    tags:
-      - 'v*'
-
-permissions:
-  contents: write
-  packages: write
-  issues: write
-  id-token: write
+    types:
+      - opened
+      - synchronize
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -43,24 +38,3 @@ jobs:
           cache-dependency-path: go.sum
       - name: Run tests
         run: go test ./... -timeout 30s -race
-  release:
-    needs: [lint, tests]
-    if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5
-        with:
-          go-version-file: 'go.mod'
-          cache: true
-          cache-dependency-path: go.sum
-      - name: goreleaser
-        uses: goreleaser/goreleaser-action@9c156ee8a17a598857849441385a2041ef570552
-        with:
-          distribution: goreleaser
-          version: v2.9.0
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
