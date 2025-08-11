@@ -1,5 +1,5 @@
 # VaultFile
-[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/hallyg/vaultfile/master.yaml)](https://github.com/HallyG/vaultfile/actions/workflows/master.yaml)
+[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/hallyg/vaultfile/release.yaml)](https://github.com/HallyG/vaultfile/actions/workflows/release.yaml)
 [![GitHub Release](https://img.shields.io/github/v/release/hallyg/vaultfile?label=latest%20release)](https://github.com/HallyG/vaultfile/releases/latest)
 [![License](https://img.shields.io/github/license/hallyg/vaultfile)](https://github.com/HallyG/vaultfile/blob/master/LICENSE)
 ![Go Version](https://img.shields.io/github/go-mod/go-version/hallyg/vaultfile)
