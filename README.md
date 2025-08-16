@@ -12,6 +12,9 @@ A CLI for encrypting and decrypting file content using the experimental VaultFil
   - [Install via Go](#install-via-go)
   - [From Source](#from-source)
 - [Documentation](#documentation)
+- [Examples](#examples)
+  - [Encrypting a File](#encrypting-a-file)
+  - [Decrypting a File](#decrypting-a-file)
 - [License](#license)
 
 ## Disclaimer
@@ -40,6 +43,48 @@ This project is intended for educational purposes only and should not be used in
 
 ## Documentation
 Documentation about the `vaultfile` binary format can be found [here](./docs/vaultfile-v1.md).
+
+## Examples
+
+Below are some basic usage examples. More can be found in the [examples directory](./examples/main.go).
+
+### Encrypting a File
+
+1. Create a sample plaintext file:
+   ```bash
+   echo "hello-world" > plaintext.txt
+   ```
+
+2. Encrypt the file:
+   ```bash
+   vaultfile encrypt -i plaintext.txt -o encrypted.vault
+   ```
+   You will be prompted for a password:
+   ```bash
+   Enter password:
+   Confirm password:
+   ```
+3. The encrypted output (`encrypted.vault`) is a binary file.
+
+### Decrypting a File
+
+1. Decrypt the encrypted file back to plaintext:
+   ```bash
+   vaultfile decrypt -i encrypted.vault -o decrypted.txt
+   ```
+   You will be prompted for a password:
+   ```bash
+   Enter password:
+   Confirm password:
+   ```
+
+2. Verify the contents:
+   ```bash
+   cat decrypted.txt
+   ```
+   ```bash
+   > hello-world
+   ```
 
 ## License
 This project is licensed under the MIT License. See the [LICENSE](./LICENSE) file for details.
