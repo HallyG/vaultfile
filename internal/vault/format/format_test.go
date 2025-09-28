@@ -11,6 +11,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var kdfParams = KDFParams{
+	MemoryKiB:     1024,
+	NumIterations: 1,
+	NumThreads:    1,
+}
+
 func TestVersionString(t *testing.T) {
 	t.Parallel()
 
@@ -35,16 +41,12 @@ func TestVersionString(t *testing.T) {
 func TestConstants(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, "HGVF", magicNumber)
-	assert.Equal(t, 4, magicNumberLen)
-	assert.Equal(t, 1, versionLen)
-	assert.Equal(t, 16, SaltLen)
-	assert.Equal(t, 24, NonceLen)
-	assert.Equal(t, 9, kdfLen)
-	assert.Equal(t, 2, totalFileLengthLen)
-	assert.Equal(t, 32, hmacLen)
-	assert.Equal(t, 88, TotalHeaderLen)
-	assert.Equal(t, 65535, MaxCipherTextSize)
+	require.Equal(t, "HGVF", MagicNumber)
+	require.Equal(t, 9, KDFParamsLen)
+	require.Equal(t, 16, SaltLen)
+	require.Equal(t, 24, NonceLen)
+	require.Equal(t, 88, TotalHeaderLen)
+	require.Equal(t, 65535, MaxCipherTextSize)
 }
 
 func TestParseHeader(t *testing.T) {
@@ -63,7 +65,7 @@ func TestParseHeader(t *testing.T) {
 		t.Parallel()
 
 		data := make([]byte, TotalHeaderLen-1)
-		copy(data, []byte(magicNumber))
+		copy(data, []byte(MagicNumber))
 
 		header, reader, err := ParseHeader(bytes.NewReader(data))
 		assert.Nil(t, header)
@@ -88,7 +90,7 @@ func TestParseHeader(t *testing.T) {
 		t.Parallel()
 
 		data := make([]byte, TotalHeaderLen)
-		copy(data, []byte(magicNumber))
+		copy(data, []byte(MagicNumber))
 		data[magicNumberLen] = 99
 
 		header, reader, err := ParseHeader(bytes.NewReader(data))
@@ -126,7 +128,6 @@ func TestEncodeHeader(t *testing.T) {
 
 		salt := [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
 		nonce := [24]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24}
-		kdfParams := getTestKDFParams()
 
 		err := EncodeHeader(&buf, mac, salt, nonce, kdfParams, 100)
 		require.NoError(t, err)
@@ -134,7 +135,7 @@ func TestEncodeHeader(t *testing.T) {
 		data := buf.Bytes()
 		assert.Len(t, data, TotalHeaderLen)
 
-		assert.Equal(t, []byte(magicNumber), data[:magicNumberLen])
+		assert.Equal(t, []byte(MagicNumber), data[:magicNumberLen])
 		assert.Equal(t, byte(VersionV1), data[magicNumberLen])
 		assert.Equal(t, salt[:], data[magicNumberLen+versionLen:magicNumberLen+versionLen+SaltLen])
 	})
@@ -179,54 +180,6 @@ func TestValidateMAC(t *testing.T) {
 		mac := hmac.New(sha256.New, []byte("test-key"))
 		err := ValidateMAC(header, mac)
 		assert.EqualError(t, err, "invalid HMAC")
-	})
-}
-
-func TestKDFParams(t *testing.T) {
-	t.Parallel()
-
-	t.Run("parse KDF params", func(t *testing.T) {
-		t.Parallel()
-
-		data := [9]byte{}
-		binary.BigEndian.PutUint32(data[0:4], 65536)
-		binary.BigEndian.PutUint32(data[4:8], 3)
-		data[8] = 4
-
-		params, err := parseKDFParams(data)
-		require.NoError(t, err)
-		assert.Equal(t, uint32(65536), params.MemoryKiB)
-		assert.Equal(t, uint32(3), params.NumIterations)
-		assert.Equal(t, uint8(4), params.NumThreads)
-	})
-
-	t.Run("encode KDF params", func(t *testing.T) {
-		t.Parallel()
-
-		params := getTestKDFParams()
-		encoded, err := encodeKDFParams(&params)
-		require.NoError(t, err)
-
-		expected := [9]byte{}
-		binary.BigEndian.PutUint32(expected[0:4], 1024)
-		binary.BigEndian.PutUint32(expected[4:8], 1)
-		expected[8] = 1
-
-		assert.Equal(t, expected, encoded)
-	})
-
-	t.Run("roundtrip encoding and parsing", func(t *testing.T) {
-		t.Parallel()
-
-		original := getTestKDFParams()
-
-		encoded, err := encodeKDFParams(&original)
-		require.NoError(t, err)
-
-		parsed, err := parseKDFParams(encoded)
-		require.NoError(t, err)
-
-		assert.Equal(t, original, *parsed)
 	})
 }
 
@@ -279,7 +232,7 @@ func createValidHeaderData(tb testing.TB) []byte {
 	data := make([]byte, TotalHeaderLen)
 	offset := 0
 
-	copy(data[offset:], []byte(magicNumber))
+	copy(data[offset:], []byte(MagicNumber))
 	offset += magicNumberLen
 
 	data[offset] = byte(VersionV1)
@@ -293,13 +246,10 @@ func createValidHeaderData(tb testing.TB) []byte {
 	copy(data[offset:], nonce[:])
 	offset += NonceLen
 
-	kdfParams := getTestKDFParams()
-	kdfBytes, err := encodeKDFParams(&kdfParams)
-	if err != nil {
-		tb.Fatal(err)
-	}
+	kdfBytes, err := kdfParams.MarshalBinary()
+	require.NoError(tb, err)
 	copy(data[offset:], kdfBytes[:])
-	offset += kdfLen
+	offset += KDFParamsLen
 
 	binary.BigEndian.PutUint16(data[offset:], uint16(TotalHeaderLen+100))
 	offset += totalFileLengthLen
@@ -310,12 +260,4 @@ func createValidHeaderData(tb testing.TB) []byte {
 	copy(data[offset:], hmacSum)
 
 	return data
-}
-
-func getTestKDFParams() KDFParams {
-	return KDFParams{
-		MemoryKiB:     1024,
-		NumIterations: 1,
-		NumThreads:    1,
-	}
 }

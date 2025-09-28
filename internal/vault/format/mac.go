@@ -8,9 +8,22 @@ import (
 	"hash"
 )
 
+func ValidateMAC(header *Header, mac hash.Hash) error {
+	computedHMAC, err := ComputeMAC(header, mac)
+	if err != nil {
+		return fmt.Errorf("compute HMAC: %w", err)
+	}
+
+	if subtle.ConstantTimeCompare(computedHMAC, header.HMAC[:]) != 1 {
+		return errors.New("invalid HMAC")
+	}
+
+	return nil
+}
+
 func ComputeMAC(header *Header, mac hash.Hash) ([]byte, error) {
 	if _, err := mac.Write(header.MagicNumber[:]); err != nil {
-		return nil, fmt.Errorf("maigc number: %w", err)
+		return nil, fmt.Errorf("magic number: %w", err)
 	}
 	if _, err := mac.Write([]byte{byte(header.Version)}); err != nil {
 		return nil, fmt.Errorf("version: %w", err)
@@ -29,17 +42,4 @@ func ComputeMAC(header *Header, mac hash.Hash) ([]byte, error) {
 	}
 
 	return mac.Sum(nil), nil
-}
-
-func ValidateMAC(header *Header, mac hash.Hash) error {
-	computedHMAC, err := ComputeMAC(header, mac)
-	if err != nil {
-		return fmt.Errorf("compute HMAC: %w", err)
-	}
-
-	if subtle.ConstantTimeCompare(computedHMAC, header.HMAC[:]) != 1 {
-		return errors.New("invalid HMAC")
-	}
-
-	return nil
 }

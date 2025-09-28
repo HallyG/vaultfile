@@ -29,10 +29,9 @@ const (
 	kdfMemoryLen               = 4
 	kdfIterationsLen           = 4
 	kdfThreadsLen              = 1
-	kdfLen                     = kdfMemoryLen + kdfIterationsLen + kdfThreadsLen
 	totalFileLengthLen         = 2
 	hmacLen                    = sha256.Size
-	TotalHeaderLen             = magicNumberLen + versionLen + SaltLen + NonceLen + kdfLen + totalFileLengthLen + hmacLen
+	TotalHeaderLen             = magicNumberLen + versionLen + SaltLen + NonceLen + KDFParamsLen + totalFileLengthLen + hmacLen
 	MaxCipherTextSize          = math.MaxUint16
 )
 
@@ -41,8 +40,8 @@ type Header struct {
 	Version                   Version
 	CipherTextKeySalt         [SaltLen]byte
 	CipherTextKeyNonce        [NonceLen]byte
-	cipherTextKeyKDFParamsRaw [kdfLen]byte
 	CipherTextKeyKDFParams    KDFParams
+	cipherTextKeyKDFParamsRaw [KDFParamsLen]byte
 	TotalPayloadLength        uint16
 	HMAC                      [hmacLen]byte
 }
@@ -84,19 +83,17 @@ func ParseHeader(input io.Reader) (*Header, io.Reader, error) {
 	copy(header.CipherTextKeyNonce[:], headerBuf[offset:offset+NonceLen])
 	offset += NonceLen
 
-	copy(header.cipherTextKeyKDFParamsRaw[:], headerBuf[offset:offset+kdfLen])
-	offset += kdfLen
+	copy(header.cipherTextKeyKDFParamsRaw[:], headerBuf[offset:offset+KDFParamsLen])
+	offset += KDFParamsLen
 
 	header.TotalPayloadLength = binary.BigEndian.Uint16(headerBuf[offset : offset+totalFileLengthLen])
 	offset += totalFileLengthLen
 
 	copy(header.HMAC[:], headerBuf[offset:offset+hmacLen])
 
-	kdfParams, err := parseKDFParams(header.cipherTextKeyKDFParamsRaw)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to parse kdf params: %w", err)
+	if err := header.CipherTextKeyKDFParams.UnmarshalBinary(header.cipherTextKeyKDFParamsRaw[:]); err != nil {
+		return nil, nil, fmt.Errorf("kdf params: %w", err)
 	}
-	header.CipherTextKeyKDFParams = *kdfParams
 
 	buf, err := r.Peek(r.Buffered())
 	if err != nil {
@@ -111,43 +108,43 @@ func EncodeHeader(output io.Writer, mac hash.Hash, salt [SaltLen]byte, nonce [No
 	w := io.MultiWriter(output, mac)
 
 	if _, err := w.Write([]byte(MagicNumber)); err != nil {
-		return fmt.Errorf("failed to write magic number: %w", err)
+		return fmt.Errorf("magic number: %w", err)
 	}
 
 	if _, err := w.Write([]byte{byte(VersionV1)}); err != nil {
-		return fmt.Errorf("failed to write version: %w", err)
+		return fmt.Errorf("version: %w", err)
 	}
 
 	if _, err := w.Write(salt[:]); err != nil {
-		return fmt.Errorf("failed to write salt: %w", err)
+		return fmt.Errorf("salt: %w", err)
 	}
 
 	if _, err := w.Write(nonce[:]); err != nil {
-		return fmt.Errorf("failed to write nonce: %w", err)
+		return fmt.Errorf("nonce: %w", err)
 	}
 
-	kdfParamsBytes, err := encodeKDFParams(&kdfParams)
+	kdfParamsBytes, err := kdfParams.MarshalBinary()
 	if err != nil {
-		return fmt.Errorf("failed to encode kdf params: %w", err)
+		return fmt.Errorf("marshal kdf params: %w", err)
 	}
 
-	if _, err := w.Write(kdfParamsBytes[:]); err != nil {
-		return fmt.Errorf("failed to write kdf params: %w", err)
+	if _, err := w.Write(kdfParamsBytes); err != nil {
+		return fmt.Errorf("kdf params: %w", err)
 	}
 
 	totalPayloadLength := uint16(TotalHeaderLen) + cipherTextLen
 	if err := binary.Write(w, binary.BigEndian, totalPayloadLength); err != nil {
-		return fmt.Errorf("failed to write total payload length: %w", err)
+		return fmt.Errorf("total payload length: %w", err)
 	}
 
 	if _, err := w.Write(mac.Sum(nil)); err != nil {
-		return fmt.Errorf("failed to write hmac: %w", err)
+		return fmt.Errorf("hmac: %w", err)
 	}
 
 	return nil
 }
 
-// ReadCipherText returns an error if the cipher text is not the expected size
+// ReadCipherText returns an error if the cipher text is not the expected size.
 func ReadCipherText(r io.Reader, header *Header) ([]byte, error) {
 	if header.TotalPayloadLength < uint16(TotalHeaderLen) {
 		return nil, fmt.Errorf("total payload length %d is smaller than header length %d", header.TotalPayloadLength, TotalHeaderLen)
@@ -161,7 +158,7 @@ func ReadCipherText(r io.Reader, header *Header) ([]byte, error) {
 			return nil, fmt.Errorf("file truncated: expected %d bytes, read %d: %w", cipherTextLen, n, err)
 		}
 
-		return nil, fmt.Errorf("read ciphertext: %w", err)
+		return nil, fmt.Errorf("read: %w", err)
 	}
 
 	return cipherText, nil

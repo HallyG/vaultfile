@@ -1,9 +1,15 @@
 package format
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
+)
+
+const (
+	memoryKiBSize     = 4
+	numIterationsSize = 4
+	numThreadsSize    = 1
+	KDFParamsLen      = memoryKiBSize + numIterationsSize + numThreadsSize
 )
 
 // KDFParams represents Argon2id parameters
@@ -13,30 +19,24 @@ type KDFParams struct {
 	NumThreads    uint8
 }
 
-func parseKDFParams(bytes [kdfLen]byte) (*KDFParams, error) {
-	return &KDFParams{
-		MemoryKiB:     binary.BigEndian.Uint32(bytes[0:4]),
-		NumIterations: binary.BigEndian.Uint32(bytes[4:8]),
-		NumThreads:    uint8(bytes[8]),
-	}, nil
+// MarshalBinary implements [encoding.BinaryMarshaler].
+func (p *KDFParams) MarshalBinary() ([]byte, error) {
+	var result [KDFParamsLen]byte
+	binary.BigEndian.PutUint32(result[0:4], p.MemoryKiB)
+	binary.BigEndian.PutUint32(result[4:8], p.NumIterations)
+	result[8] = p.NumThreads
+	return result[:], nil
 }
 
-func encodeKDFParams(params *KDFParams) ([kdfLen]byte, error) {
-	var result [kdfLen]byte
-	buf := bytes.NewBuffer(nil)
-
-	if err := binary.Write(buf, binary.BigEndian, params.MemoryKiB); err != nil {
-		return result, fmt.Errorf("failed to write KDF memory parameter: %w", err)
+// UnmarshalBinary implements [encoding.BinaryUnmarshaler].
+func (p *KDFParams) UnmarshalBinary(data []byte) error {
+	if len(data) != KDFParamsLen {
+		return fmt.Errorf("invalid length: got %d, expected %d", len(data), KDFParamsLen)
 	}
 
-	if err := binary.Write(buf, binary.BigEndian, params.NumIterations); err != nil {
-		return result, fmt.Errorf("failed to write KDF iterations parameter: %w", err)
-	}
+	p.MemoryKiB = binary.BigEndian.Uint32(data[0:4])
+	p.NumIterations = binary.BigEndian.Uint32(data[4:8])
+	p.NumThreads = data[8]
 
-	if _, err := buf.Write([]byte{params.NumThreads}); err != nil {
-		return result, fmt.Errorf("failed to write KDF threads parameter: %w", err)
-	}
-
-	copy(result[:], buf.Bytes())
-	return result, nil
+	return nil
 }
