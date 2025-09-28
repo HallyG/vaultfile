@@ -1,0 +1,51 @@
+name: Release Tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: tag the latest commit with the given version (prefixed with v)
+        required: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      packages: write
+      issues: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Validate version
+        run: |
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?(\+[a-zA-Z0-9.-]+)?$ ]]; then
+            echo "::error::Version '$VERSION' must follow semantic versioning (e.g., v1.2.3)"
+            exit 1
+          fi
+          echo "::notice::Version format is valid: $VERSION"
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+      - name: Check tag existence
+        run: |
+          if git tag -l | grep -q "^$VERSION$"; then
+            echo "::error::Tag $VERSION already exists locally"
+            exit 1
+          fi
+          
+          if git ls-remote --tags origin | grep -q "refs/tags/$VERSION$"; then
+            echo "::error::Tag $VERSION already exists on remote"
+            exit 1
+          fi
+          
+          echo "::notice::Tag $VERSION is available"
+        env:
+          VERSION: ${{ github.event.inputs.version }}
