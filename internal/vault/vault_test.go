@@ -117,7 +117,7 @@ func TestV1Format(t *testing.T) {
 
 		var buf bytes.Buffer
 		err := v.Encrypt(t.Context(), &buf, []byte{}, plainText)
-		require.ErrorContains(t, err, "password must be at least 1 characters long")
+		require.ErrorContains(t, err, "hmac key derivation failed: password length must be at least 1 characters, got 0")
 	})
 
 	t.Run("returns error when encrypt with output ciphertext too big", func(t *testing.T) {

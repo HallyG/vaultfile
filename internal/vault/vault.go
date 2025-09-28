@@ -15,7 +15,7 @@ import (
 
 type Vault struct {
 	logger    *slog.Logger
-	kdfParams *krypto.Argon2idParams
+	kdfParams krypto.Argon2idParams
 }
 
 func WithLogger(logger *slog.Logger) func(*Vault) {
@@ -26,7 +26,7 @@ func WithLogger(logger *slog.Logger) func(*Vault) {
 
 func WithKDFParams(kdfParams krypto.Argon2idParams) func(*Vault) {
 	return func(v *Vault) {
-		v.kdfParams = &kdfParams
+		v.kdfParams = kdfParams
 	}
 }
 
@@ -122,7 +122,7 @@ func (v *Vault) Decrypt(ctx context.Context, input io.Reader, password []byte) (
 		return nil, fmt.Errorf("reading header: %w", err)
 	}
 
-	internalKDFParams := &krypto.Argon2idParams{
+	internalKDFParams := krypto.Argon2idParams{
 		MemoryKiB:     header.CipherTextKeyKDFParams.MemoryKiB,
 		NumIterations: header.CipherTextKeyKDFParams.NumIterations,
 		NumThreads:    header.CipherTextKeyKDFParams.NumThreads,
@@ -171,6 +171,6 @@ func (v *Vault) deriveHMACKey(ctx context.Context, password []byte, salt []byte,
 	return krypto.DeriveKeyFromPassword(ctx, password, salt, kdfParams, keySize)
 }
 
-func (v *Vault) deriveEncryptionKey(ctx context.Context, password []byte, salt []byte, kdfParams *krypto.Argon2idParams, keySize uint32) ([]byte, error) {
+func (v *Vault) deriveEncryptionKey(ctx context.Context, password []byte, salt []byte, kdfParams krypto.Argon2idParams, keySize uint32) ([]byte, error) {
 	return krypto.DeriveKeyFromPassword(ctx, password, salt, kdfParams, keySize)
 }

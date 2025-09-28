@@ -1,15 +1,16 @@
 package krypto_test
 
 import (
+	"context"
 	"errors"
-	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/HallyG/vaultfile/internal/krypto"
 	"github.com/stretchr/testify/require"
 )
 
-func TestDefaultArgon2idParams(t *testing.T) {
+func TestArgon2idParams(t *testing.T) {
 	t.Parallel()
 
 	t.Run("default argon2id returns expected values", func(t *testing.T) {
@@ -46,14 +47,14 @@ func TestGenerateSalt(t *testing.T) {
 			expectedErr:  nil,
 			expectedSalt: make([]byte, krypto.MaxSaltLength),
 		},
-		"error when salt length too long": {
+		"returns error when salt length too long": {
 			saltLength:   krypto.MaxSaltLength + 1,
-			expectedErr:  errors.New("salt length exceeds maximum of 255 bytes"),
+			expectedErr:  errors.New("salt size exceeds maximum of 255 bytes, got 25"),
 			expectedSalt: nil,
 		},
-		"error when salt length too short": {
+		"returns error when salt length too short": {
 			saltLength:   krypto.MinSaltLength - 1,
-			expectedErr:  errors.New("salt must be at least 16 bytes long"),
+			expectedErr:  errors.New("salt size must be at least 16 bytes, got 15"),
 			expectedSalt: nil,
 		},
 	}
@@ -76,136 +77,152 @@ func TestGenerateSalt(t *testing.T) {
 func TestDeriveKeyFromPassword(t *testing.T) {
 	t.Parallel()
 
-	basicArgonParams := func() *krypto.Argon2idParams {
-		return &krypto.Argon2idParams{
-			MemoryKiB:     1,
-			NumIterations: 1,
-			NumThreads:    1,
-		}
-	}
-
-	validSalt := func() []byte {
-		return make([]byte, 32)
+	password := []byte("securepassword123")
+	salt := []byte(strings.Repeat("s", 32))
+	kdfParams := krypto.Argon2idParams{
+		MemoryKiB:     1,
+		NumIterations: 1,
+		NumThreads:    1,
 	}
 
 	tests := map[string]struct {
-		password       string
+		password       []byte
 		salt           []byte
-		params         *krypto.Argon2idParams
-		keyLength      uint32
+		params         krypto.Argon2idParams
+		keyLen         uint32
 		expectedKeyLen int
 		expectedErr    error
 	}{
 		"valid input": {
-			password:       "securepassword123",
-			salt:           validSalt(),
-			params:         basicArgonParams(),
-			keyLength:      32,
+			password:       password,
+			salt:           salt,
+			params:         kdfParams,
+			keyLen:         32,
 			expectedKeyLen: 32,
 			expectedErr:    nil,
 		},
 		"minimum password length": {
-			password:       "123456789101", // Exactly key.MinPasswordLength
-			salt:           validSalt(),
-			params:         basicArgonParams(),
-			keyLength:      32,
+			password:       []byte(strings.Repeat("1", krypto.MinPasswordLength)),
+			salt:           salt,
+			params:         kdfParams,
+			keyLen:         32,
 			expectedKeyLen: 32,
 			expectedErr:    nil,
 		},
+		"returns error when nil password": {
+			password:    nil,
+			salt:        salt,
+			params:      kdfParams,
+			keyLen:      32,
+			expectedErr: errors.New("password cannot be nil"),
+		},
+		"returns error when password too short": {
+			password:    []byte(strings.Repeat("1", krypto.MinPasswordLength-1)),
+			salt:        salt,
+			params:      kdfParams,
+			keyLen:      32,
+			expectedErr: errors.New("password length must be at least 1 characters, got 0"),
+		},
+		"returns error when password too long": {
+			password:    []byte(strings.Repeat("1", krypto.MaxPasswordLength+1)),
+			salt:        salt,
+			params:      kdfParams,
+			keyLen:      32,
+			expectedErr: errors.New("password exceeds maximum length of 256 characters, got 257"),
+		},
+		"returns error when invalid UTF-8 password": {
+			password:    []byte{0xff, 0xfe, 0xfd, 0xff, 0xfe, 0xfd, 0xff, 0xfe, 0xfd, 0xff, 0xfe, 0xfd},
+			salt:        salt,
+			params:      kdfParams,
+			keyLen:      32,
+			expectedErr: krypto.ErrInvalidUTF8,
+		},
 		"minimum salt length": {
-			password:       "securepassword123",
+			password:       password,
 			salt:           make([]byte, krypto.MinSaltLength),
-			params:         basicArgonParams(),
-			keyLength:      32,
+			params:         kdfParams,
+			keyLen:         32,
 			expectedKeyLen: 32,
 			expectedErr:    nil,
 		},
 		"maximum salt length": {
-			password:       "securepassword123",
+			password:       password,
 			salt:           make([]byte, krypto.MaxSaltLength),
-			params:         basicArgonParams(),
-			keyLength:      32,
+			params:         kdfParams,
+			keyLen:         32,
 			expectedKeyLen: 32,
 			expectedErr:    nil,
 		},
-		"error when key length too short": {
-			password:       "securepassword123",
-			salt:           validSalt(),
-			params:         basicArgonParams(),
-			keyLength:      15, // Exactly key.MinKeyLength - 1
-			expectedKeyLen: 0,
-			expectedErr:    errors.New("key length must be at least 16 bytes"),
+		"returns error when nil salt": {
+			password:    password,
+			salt:        nil,
+			params:      kdfParams,
+			keyLen:      32,
+			expectedErr: errors.New("salt cannot be nil"),
+		},
+		"returns error when salt too short": {
+			password:    password,
+			salt:        make([]byte, krypto.MinSaltLength-1),
+			params:      kdfParams,
+			keyLen:      32,
+			expectedErr: errors.New("salt size must be at least 16 bytes, got 15"),
+		},
+		"returns error when salt too long": {
+			password:    password,
+			salt:        make([]byte, krypto.MaxSaltLength+1),
+			params:      kdfParams,
+			keyLen:      32,
+			expectedErr: errors.New("salt size exceeds maximum of 255 bytes, got 256"),
+		},
+		"returns error when key too short": {
+			password:    password,
+			salt:        salt,
+			params:      kdfParams,
+			keyLen:      krypto.MinKeyLength - 1,
+			expectedErr: errors.New("key length must be at least 16 bytes, got 1"),
+		},
+		"returns error when key too long": {
+			password:    password,
+			salt:        salt,
+			params:      kdfParams,
+			keyLen:      krypto.MaxKeyLength + 1,
+			expectedErr: errors.New("key length exceeds maximum of 64 bytes, got 65"),
 		},
 		"different key length": {
-			password:       "securepassword123",
-			salt:           validSalt(),
-			params:         basicArgonParams(),
-			keyLength:      64,
+			password:       password,
+			salt:           salt,
+			params:         kdfParams,
+			keyLen:         64,
 			expectedKeyLen: 64,
 			expectedErr:    nil,
 		},
-		"error when password too short": {
-			password:       "", // key.MinPasswordLength - 1
-			salt:           validSalt(),
-			params:         basicArgonParams(),
-			keyLength:      32,
-			expectedKeyLen: 0,
-			expectedErr:    fmt.Errorf("password must be at least %d characters long", krypto.MinPasswordLength),
-		},
-		"error when invalid UTF-8 password": {
-			password:       string([]byte{0xff, 0xfe, 0xfd, 0xff, 0xfe, 0xfd, 0xff, 0xfe, 0xfd, 0xff, 0xfe, 0xfd}),
-			salt:           validSalt(),
-			params:         basicArgonParams(),
-			keyLength:      32,
-			expectedKeyLen: 0,
-			expectedErr:    krypto.ErrInvalidUTF8,
-		},
-		"error when salt too short": {
-			password:       "securepassword123",
-			salt:           make([]byte, krypto.MinSaltLength-1),
-			params:         basicArgonParams(),
-			keyLength:      32,
-			expectedKeyLen: 0,
-			expectedErr:    fmt.Errorf("salt must be at least %d bytes long", krypto.MinSaltLength),
-		},
-		"error when salt too long": {
-			password:       "securepassword123",
-			salt:           make([]byte, krypto.MaxSaltLength+1),
-			params:         basicArgonParams(),
-			keyLength:      32,
-			expectedKeyLen: 0,
-			expectedErr:    fmt.Errorf("salt length exceeds maximum of %d bytes", krypto.MaxSaltLength),
-		},
 		"error when zero iterations": {
-			password:       "securepassword123",
-			salt:           validSalt(),
-			params:         &krypto.Argon2idParams{MemoryKiB: 128 * 1024, NumIterations: 0, NumThreads: 4},
-			keyLength:      32,
-			expectedKeyLen: 0,
-			expectedErr:    errors.New("invalid Argon2id parameters: NumIterations: cannot be blank."),
+			password:    password,
+			salt:        salt,
+			params:      krypto.Argon2idParams{MemoryKiB: 1, NumIterations: 0, NumThreads: 1},
+			keyLen:      32,
+			expectedErr: errors.New("invalid Argon2id parameters: NumIterations: cannot be blank."),
 		},
-		"error when zero memory": {
-			password:       "securepassword123",
-			salt:           validSalt(),
-			params:         &krypto.Argon2idParams{MemoryKiB: 0, NumIterations: 4, NumThreads: 4},
-			keyLength:      32,
-			expectedKeyLen: 0,
-			expectedErr:    errors.New("invalid Argon2id parameters: MemoryKiB: cannot be blank."),
+		"returns error when zero memory": {
+			password:    password,
+			salt:        salt,
+			params:      krypto.Argon2idParams{MemoryKiB: 0, NumIterations: 1, NumThreads: 1},
+			keyLen:      32,
+			expectedErr: errors.New("invalid Argon2id parameters: MemoryKiB: cannot be blank."),
 		},
-		"error when zero threads": {
-			password:       "securepassword123",
-			salt:           validSalt(),
-			params:         &krypto.Argon2idParams{MemoryKiB: 128 * 1024, NumIterations: 4, NumThreads: 0},
-			keyLength:      32,
-			expectedKeyLen: 0,
-			expectedErr:    errors.New("invalid Argon2id parameters: NumThreads: cannot be blank."),
+		"returns error when zero threads": {
+			password:    password,
+			salt:        salt,
+			params:      krypto.Argon2idParams{MemoryKiB: 1, NumIterations: 1, NumThreads: 0},
+			keyLen:      32,
+			expectedErr: errors.New("invalid Argon2id parameters: NumThreads: cannot be blank."),
 		},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			key, err := krypto.DeriveKeyFromPassword(t.Context(), []byte(test.password), test.salt, test.params, test.keyLength)
+			key, err := krypto.DeriveKeyFromPassword(t.Context(), []byte(test.password), test.salt, test.params, test.keyLen)
 			if test.expectedErr != nil {
 				require.ErrorContains(t, err, test.expectedErr.Error())
 				require.Nil(t, key)
@@ -217,22 +234,27 @@ func TestDeriveKeyFromPassword(t *testing.T) {
 		})
 	}
 
+	t.Run("returns error when context cancelled", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+
+		key, err := krypto.DeriveKeyFromPassword(ctx, password, salt, kdfParams, 32)
+		require.ErrorContains(t, err, "context canceled")
+		require.Nil(t, key)
+	})
+
 	t.Run("same input should produce same key", func(t *testing.T) {
 		t.Parallel()
 
-		password := []byte("securepassword123")
-		salt := make([]byte, 32)
-		params := &krypto.Argon2idParams{
-			MemoryKiB:     1,
-			NumIterations: 1,
-			NumThreads:    1,
-		}
-
-		key1, err := krypto.DeriveKeyFromPassword(t.Context(), password, salt, params, 32)
+		key1, err := krypto.DeriveKeyFromPassword(t.Context(), password, salt, kdfParams, 32)
 		require.NoError(t, err)
+		require.NotNil(t, key1)
 
-		key2, err := krypto.DeriveKeyFromPassword(t.Context(), password, salt, params, 32)
+		key2, err := krypto.DeriveKeyFromPassword(t.Context(), password, salt, kdfParams, 32)
 		require.NoError(t, err)
+		require.NotNil(t, key2)
 
 		require.Equal(t, key1, key2)
 	})

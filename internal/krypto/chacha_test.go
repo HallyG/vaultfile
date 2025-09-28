@@ -173,12 +173,12 @@ func setupCipher(t *testing.T) krypto.Krypto {
 	password := []byte("securepassword")
 	salt := []byte("randomsaltrandomsalt")
 	params := krypto.Argon2idParams{
-		MemoryKiB:     1024,
+		MemoryKiB:     1,
 		NumIterations: 1,
 		NumThreads:    1,
 	}
 
-	key, err := krypto.DeriveKeyFromPassword(t.Context(), password, salt, &params, keySize)
+	key, err := krypto.DeriveKeyFromPassword(t.Context(), password, salt, params, keySize)
 	require.NoError(t, err)
 
 	cipher, err := krypto.NewChaCha20Crypto(key)
