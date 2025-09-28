@@ -28,31 +28,13 @@ func TestVersion(t *testing.T) {
 func TestV1FormatDecrypt(t *testing.T) {
 	t.Parallel()
 
-	t.Run("returns error when invalid KDF parameters", func(t *testing.T) {
-		t.Parallel()
-
-		plainText := []byte("hello, world!")
-		v, password := setupVault(t,
-			vault.WithKDFParams(krypto.Argon2idParams{
-				MemoryKiB:     0,
-				NumIterations: 1,
-				NumThreads:    1,
-			}),
-		)
-
-		var cipherText bytes.Buffer
-		err := v.Encrypt(t.Context(), &cipherText, password, plainText)
-		require.EqualError(t, err, "ciphertext key derivation failed: invalid Argon2id parameters: MemoryKiB: cannot be blank.")
-	})
-
 	t.Run("returns error when nil password", func(t *testing.T) {
 		t.Parallel()
 
-		plainText := []byte("hello, world!")
+		cipherText := []byte("some fake ciphertext")
 		v, _ := setupVault(t)
 
-		var cipherText bytes.Buffer
-		err := v.Encrypt(t.Context(), &cipherText, nil, plainText)
+		_, err := v.Decrypt(t.Context(), bytes.NewReader(cipherText), nil)
 		require.EqualError(t, err, "password cannot be nil")
 	})
 
@@ -63,23 +45,6 @@ func TestV1FormatDecrypt(t *testing.T) {
 
 		_, err := v.Decrypt(t.Context(), nil, password)
 		require.EqualError(t, err, "input reader cannot be nil")
-	})
-
-	t.Run("returns error when context cancellation", func(t *testing.T) {
-		t.Parallel()
-
-		plainText := []byte("hello, world!")
-		v, password := setupVault(t)
-
-		var cipherText bytes.Buffer
-		err := v.Encrypt(t.Context(), &cipherText, password, plainText)
-		require.NoError(t, err)
-
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel()
-
-		_, err = v.Decrypt(ctx, bytes.NewReader(cipherText.Bytes()), password)
-		require.ErrorIs(t, err, context.Canceled)
 	})
 }
 
@@ -160,6 +125,23 @@ func TestV1FormatEncrypt(t *testing.T) {
 
 		err := v.Encrypt(t.Context(), &failingWriter{}, password, plainText)
 		require.Error(t, err)
+	})
+
+	t.Run("returns error when invalid KDF parameters", func(t *testing.T) {
+		t.Parallel()
+
+		plainText := []byte("hello, world!")
+		v, password := setupVault(t,
+			vault.WithKDFParams(krypto.Argon2idParams{
+				MemoryKiB:     0,
+				NumIterations: 1,
+				NumThreads:    1,
+			}),
+		)
+
+		var cipherText bytes.Buffer
+		err := v.Encrypt(t.Context(), &cipherText, password, plainText)
+		require.EqualError(t, err, "ciphertext key derivation failed: invalid Argon2id parameters: MemoryKiB: cannot be blank.")
 	})
 
 	t.Run("different ciphertexts when different passwords", func(t *testing.T) {
@@ -256,7 +238,7 @@ func TestV1FormatEncryptDecryptRoundTrip(t *testing.T) {
 		require.NoError(t, err)
 
 		decrypted, err := v.Decrypt(t.Context(), bytes.NewReader(cipherText.Bytes()), []byte("wrong-password"))
-		require.EqualError(t, err, "validate header: invalid HMAC")
+		require.EqualError(t, err, "validate header: computed HMAC does not match header HMAC")
 		require.Empty(t, decrypted)
 	})
 

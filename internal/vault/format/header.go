@@ -18,6 +18,16 @@ const (
 	TotalHeaderLen        = MagicNumberLen + VersionLen + SaltLen + NonceLen + KDFParamsLen + TotalPayloadLengthLen + HMACLen
 )
 
+type Header struct {
+	MagicNumber        [MagicNumberLen]byte
+	Version            Version
+	Salt               [SaltLen]byte
+	Nonce              [NonceLen]byte
+	KDFParams          KDFParams
+	TotalPayloadLength uint16
+	HMAC               [HMACLen]byte
+}
+
 // Validate checks if the Header fields are valid.
 func (h *Header) Validate() error {
 	if !bytes.Equal(h.MagicNumber[:], []byte(MagicNumber)) {
@@ -91,10 +101,11 @@ func (h *Header) UnmarshalBinary(data []byte) error {
 	copy(h.Nonce[:], data[offset:offset+NonceLen])
 	offset += NonceLen
 
-	copy(h.rawKDFParams[:], data[offset:offset+NonceLen])
+	var rawKDFParams [KDFParamsLen]byte
+	copy(rawKDFParams[:], data[offset:offset+NonceLen])
 	offset += KDFParamsLen
 
-	if err := h.KDFParams.UnmarshalBinary(h.rawKDFParams[:]); err != nil {
+	if err := h.KDFParams.UnmarshalBinary(rawKDFParams[:]); err != nil {
 		return fmt.Errorf("unmarshal KDF params: %w", err)
 	}
 

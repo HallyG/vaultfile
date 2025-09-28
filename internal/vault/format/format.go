@@ -20,17 +20,6 @@ const (
 	VersionV1      Version = 1
 )
 
-type Header struct {
-	MagicNumber        [MagicNumberLen]byte
-	Version            Version
-	Salt               [SaltLen]byte
-	Nonce              [NonceLen]byte
-	KDFParams          KDFParams
-	rawKDFParams       [KDFParamsLen]byte
-	TotalPayloadLength uint16
-	HMAC               [HMACLen]byte
-}
-
 // ParseHeader parses a Header from an [io.Reader] and returns the header and a reader for the remaining data.
 func ParseHeader(input io.Reader) (*Header, io.Reader, error) {
 	if input == nil {

@@ -15,35 +15,28 @@ func ValidateHMAC(header *Header, mac hash.Hash) error {
 	}
 
 	if subtle.ConstantTimeCompare(computedHMAC, header.HMAC[:]) != 1 {
-		return errors.New("invalid HMAC")
+		return errors.New("computed HMAC does not match header HMAC")
 	}
 
 	return nil
 }
 
 func ComputeHMAC(header *Header, mac hash.Hash) ([]byte, error) {
-	if _, err := mac.Write(header.MagicNumber[:]); err != nil {
-		return nil, fmt.Errorf("magic number: %w", err)
-	}
+	mac.Reset() // incase we try to reuse the mac
 
-	if _, err := mac.Write([]byte{byte(header.Version)}); err != nil {
-		return nil, fmt.Errorf("version: %w", err)
-	}
+	mac.Write(header.MagicNumber[:])
+	mac.Write([]byte{byte(header.Version)})
+	mac.Write(header.Salt[:])
+	mac.Write(header.Nonce[:])
 
-	if _, err := mac.Write(header.Salt[:]); err != nil {
-		return nil, fmt.Errorf("salt: %w", err)
+	kdfParamsBytes, err := header.KDFParams.MarshalBinary()
+	if err != nil {
+		return nil, fmt.Errorf("marshal KDF params: %w", err)
 	}
-
-	if _, err := mac.Write(header.Nonce[:]); err != nil {
-		return nil, fmt.Errorf("nonce: %w", err)
-	}
-
-	if _, err := mac.Write(header.rawKDFParams[:]); err != nil {
-		return nil, fmt.Errorf("KDF params: %w", err)
-	}
+	mac.Write(kdfParamsBytes)
 
 	if err := binary.Write(mac, binary.BigEndian, header.TotalPayloadLength); err != nil {
-		return nil, fmt.Errorf("payload length: %w", err)
+		return nil, fmt.Errorf("total payload length: %w", err)
 	}
 
 	return mac.Sum(nil), nil

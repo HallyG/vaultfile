@@ -47,6 +47,6 @@ func TestValidateHMAC(t *testing.T) {
 
 		mac := hmac.New(sha256.New, []byte("test-key"))
 		err := format.ValidateHMAC(header, mac)
-		require.EqualError(t, err, "invalid HMAC")
+		require.EqualError(t, err, "computed HMAC does not match header HMAC")
 	})
 }
