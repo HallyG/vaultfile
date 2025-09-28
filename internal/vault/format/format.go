@@ -71,7 +71,7 @@ func EncodeHeader(output io.Writer, mac hash.Hash, salt [SaltLen]byte, nonce [No
 		Salt:               salt,
 		Nonce:              nonce,
 		KDFParams:          kdfParams,
-		TotalPayloadLength: uint16(TotalHeaderLen) + cipherTextLen,
+		TotalPayloadLength: uint16(TotalHeaderLen) + cipherTextLen, // TODO: add overflow check
 	}
 
 	// Marshal header without HMAC

@@ -71,3 +71,31 @@ func TestHeaderValidate(t *testing.T) {
 		})
 	}
 }
+
+func TestHeaderUnmarshalBinary(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		expectedErr string
+		data        []byte
+	}{
+		"returns error when data too long": {
+			data:        make([]byte, format.TotalHeaderLen+1),
+			expectedErr: "invalid length: got 89, expected 88",
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var header format.Header
+			err := header.UnmarshalBinary(test.data)
+
+			if test.expectedErr != "" {
+				require.EqualError(t, err, test.expectedErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}

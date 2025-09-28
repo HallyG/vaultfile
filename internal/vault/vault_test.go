@@ -3,6 +3,7 @@ package vault_test
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"math"
 	"testing"
 
@@ -197,35 +198,39 @@ func TestV1FormatEncryptDecryptRoundTrip(t *testing.T) {
 		t.Skip("skipping integration test in short mode")
 	}
 
-	t.Run("encrypt and decrypt", func(t *testing.T) {
-		t.Parallel()
+	tests := map[string]struct {
+		plaintext []byte
+	}{
+		"empty":         {plaintext: []byte{}},
+		"single byte":   {plaintext: []byte{0x42}},
+		"null bytes":    {plaintext: make([]byte, 100)},
+		"random small":  {plaintext: generateRandomBytes(t, 50)},
+		"random medium": {plaintext: generateRandomBytes(t, 1000)},
+		"random large":  {plaintext: generateRandomBytes(t, 10000)},
+		"all 0xFF":      {plaintext: bytes.Repeat([]byte{0xFF}, 500)},
+		"unicode text":  {plaintext: []byte("Hello 世界! 🚀 Testing Unicode")},
+		"binary data":   {plaintext: []byte{0x00, 0x01, 0x02, 0x03, 0xFF, 0xFE, 0xFD}},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 
-		plainText := []byte("hello, world!")
-		v, password := setupVault(t)
+			v, password := setupVault(t)
 
-		var cipherText bytes.Buffer
-		err := v.Encrypt(t.Context(), &cipherText, password, plainText)
-		require.NoError(t, err)
+			var cipherText bytes.Buffer
+			err := v.Encrypt(t.Context(), &cipherText, password, test.plaintext)
+			require.NoError(t, err)
 
-		decrypted, err := v.Decrypt(t.Context(), bytes.NewReader(cipherText.Bytes()), password)
-		require.NoError(t, err)
-		require.Equal(t, plainText, decrypted)
-	})
+			decrypted, err := v.Decrypt(t.Context(), bytes.NewReader(cipherText.Bytes()), password)
+			require.NoError(t, err)
 
-	t.Run("encrypt and decrypt when empty plaintext", func(t *testing.T) {
-		t.Parallel()
-
-		plainText := []byte{}
-		v, password := setupVault(t)
-
-		var cipherText bytes.Buffer
-		err := v.Encrypt(t.Context(), &cipherText, password, plainText)
-		require.NoError(t, err)
-
-		decrypted, err := v.Decrypt(t.Context(), bytes.NewReader(cipherText.Bytes()), password)
-		require.NoError(t, err)
-		require.Empty(t, decrypted)
-	})
+			if len(test.plaintext) == 0 {
+				require.Empty(t, decrypted)
+			} else {
+				require.Equal(t, test.plaintext, decrypted)
+			}
+		})
+	}
 
 	t.Run("returns error when decrypt with wrong password", func(t *testing.T) {
 		t.Parallel()
@@ -276,6 +281,16 @@ func setupVault(tb testing.TB, opts ...vault.Option) (*vault.Vault, []byte) {
 	require.NoError(tb, err)
 
 	return v, password
+}
+
+func generateRandomBytes(tb testing.TB, length int) []byte {
+	tb.Helper()
+
+	data := make([]byte, length)
+	_, err := rand.Read(data)
+	require.NoError(tb, err)
+
+	return data
 }
 
 type failingWriter struct{}
