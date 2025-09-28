@@ -14,7 +14,4 @@ jobs:
       cancel-in-progress: true
     uses: ./.github/workflows/ci.yaml
   security:
-    concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
-      cancel-in-progress: true
     uses: ./.github/workflows/security.yaml

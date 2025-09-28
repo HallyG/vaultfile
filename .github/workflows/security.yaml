@@ -7,7 +7,6 @@ jobs:
   check-for-vulnerabilities:
     runs-on: ubuntu-24.04
     permissions:
-      security-events: write
       contents: read
     steps:
       - uses: golang/govulncheck-action@b625fbe08f3bccbe446d94fbf87fcc875a4f50ee
