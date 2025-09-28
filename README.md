@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/github/license/hallyg/vaultfile)](https://github.com/HallyG/vaultfile/blob/master/LICENSE)
 ![Go Version](https://img.shields.io/github/go-mod/go-version/hallyg/vaultfile)
 
-A CLI for encrypting and decrypting file content using the experimental VaultFile format.
+A CLI for encrypting and decrypting content with a password using the experimental VaultFile format.
 
 ## Table of Contents
 - [Disclaimer](#disclaimer)
@@ -13,8 +13,8 @@ A CLI for encrypting and decrypting file content using the experimental VaultFil
   - [From Source](#from-source)
 - [Documentation](#documentation)
 - [Examples](#examples)
-  - [Encrypting a File](#encrypting-a-file)
-  - [Decrypting a File](#decrypting-a-file)
+  - [Encrypting Content](#encrypting-content)
+  - [Decrypting Content](#decrypting-content)
 - [License](#license)
 
 ## Disclaimer
@@ -48,43 +48,63 @@ Documentation about the `vaultfile` binary format can be found [here](./docs/vau
 
 Below are some basic usage examples. More can be found in the [examples directory](./examples).
 
-### Encrypting a File
+### Encrypting Content
 
-1. Create a sample plaintext file:
+1. Encrypt content from a file:
    ```bash
-   echo "hello-world" > plaintext.txt
-   ```
-
-2. Encrypt the file:
-   ```bash
-   vaultfile encrypt -i plaintext.txt -o encrypted.vault
-   ```
-   You will be prompted for a password:
-   ```bash
-   Enter password:
-   Confirm password:
-   ```
-3. The encrypted output (`encrypted.vault`) is a binary file.
-
-### Decrypting a File
-
-1. Decrypt the encrypted file back to plaintext:
-   ```bash
-   vaultfile decrypt -i encrypted.vault -o decrypted.txt
-   ```
-   You will be prompted for a password:
-   ```bash
-   Enter password:
-   Confirm password:
+   cat plaintext.txt | vaultfile encrypt > encrypted.vault
    ```
 
-2. Verify the contents:
+2. Encrypt text directly:
    ```bash
-   cat decrypted.txt
+   echo "hello-world" | vaultfile encrypt > encrypted.vault
    ```
+
+3. Encrypt using input redirection:
    ```bash
-   > hello-world
+   vaultfile encrypt < plaintext.txt > encrypted.vault
    ```
+
+You will be prompted for a password during encryption:
+```bash
+Enter password:
+Confirm password:
+```
+
+### Decrypting Content
+
+1. Decrypt to a file:
+   ```bash
+   cat encrypted.vault | vaultfile decrypt > decrypted.txt
+   ```
+
+2. Decrypt and display directly:
+   ```bash
+   cat encrypted.vault | vaultfile decrypt
+   ```
+
+3. Decrypt using input redirection:
+   ```bash
+   vaultfile decrypt < encrypted.vault > decrypted.txt
+   ```
+
+You will be prompted for a password during decryption:
+```bash
+Enter password:
+```
+
+### Chaining Operations
+
+```bash
+# Compress then encrypt
+tar czf - my-directory/ | vaultfile encrypt > backup.vault
+
+# Decrypt then extract
+cat backup.vault | vaultfile decrypt | tar xzf -
+
+# Encrypt data from a web request
+curl -s https://api.example.com/data.json | vaultfile encrypt > api-data.vault
+```
 
 ## License
 This project is licensed under the MIT License. See the [LICENSE](./LICENSE) file for details.
