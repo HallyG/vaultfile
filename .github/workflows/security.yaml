@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: golang/govulncheck-action@b625fbe08f3bccbe446d94fbf87fcc875a4f50ee
         with:
-          cache-dependency-path: go.sum
+          go-version-input: '1.24.2'
           output-format: sarif
           output-file: govulncheck.sarif
       - name: Upload static analysis result
