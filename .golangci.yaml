@@ -10,3 +10,7 @@ formatters:
   enable:
     - gofmt
     - goimports
+issues:
+  uniq-by-line: false
+output:
+  show-stats: true
