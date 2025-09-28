@@ -23,9 +23,14 @@ jobs:
         shell: bash
       - name: Run govulncheck
         run: govulncheck -C . -format sarif ./... > govulncheck.sarif
+      - name: Prepare artifact name
+        id: prepare
+        run: |
+          sanitized_branch_name=$(echo "${GITHUB_REF_NAME}" | tr '/' '-')
+          echo "name=govulncheck-${sanitized_branch_name}-${GITHUB_RUN_NUMBER}" >> $GITHUB_OUTPUT
       - name: Upload govulncheck result
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: govulncheck-${{ github.run_number }}
+          name: ${{ steps.prepare.outputs.name }}
           path: govulncheck.sarif
           retention-days: 1
