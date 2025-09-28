@@ -8,9 +8,16 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 
 	"github.com/HallyG/vaultfile/internal/krypto"
 	"github.com/HallyG/vaultfile/internal/vault/format"
+)
+
+const (
+	// Assumes we are using [krypto.NewChaCha20Crypto] because XChaCha20-Poly1305 is a
+	// stream cipher (hence output=input bytes) with an additional 16 byte auth tag.
+	MaxCipherTextSize = math.MaxUint16 - 16 - format.TotalHeaderLen
 )
 
 type Vault struct {
@@ -18,19 +25,21 @@ type Vault struct {
 	kdfParams krypto.Argon2idParams
 }
 
-func WithLogger(logger *slog.Logger) func(*Vault) {
+type Option func(*Vault)
+
+func WithLogger(logger *slog.Logger) Option {
 	return func(v *Vault) {
 		v.logger = logger
 	}
 }
 
-func WithKDFParams(kdfParams krypto.Argon2idParams) func(*Vault) {
+func WithKDFParams(kdfParams krypto.Argon2idParams) Option {
 	return func(v *Vault) {
 		v.kdfParams = kdfParams
 	}
 }
 
-func New(opts ...func(*Vault)) (*Vault, error) {
+func New(opts ...Option) (*Vault, error) {
 	v := &Vault{
 		kdfParams: krypto.DefaultArgon2idParams(),
 	}
@@ -63,10 +72,8 @@ func (v *Vault) Encrypt(ctx context.Context, output io.Writer, password []byte, 
 		return errors.New("plaintext cannot be nil")
 	}
 
-	// Assumes we are using [krypto.NewChaCha20Crypto] because XChaCha20-Poly1305 is a
-	// stream cipher (hence output=input bytes) with an additional 16 byte auth tag.
-	if len(plainText) > format.MaxCipherTextSize-16 {
-		return fmt.Errorf("plaintext exceeds maximum of %d bytes, got %d", format.MaxCipherTextSize-64, len(plainText))
+	if len(plainText) > MaxCipherTextSize {
+		return fmt.Errorf("ciphertext exceeds maximum of %d bytes, got %d", MaxCipherTextSize, len(plainText))
 	}
 
 	salt, err := krypto.GenerateSalt(krypto.MinSaltLength)
@@ -98,10 +105,6 @@ func (v *Vault) Encrypt(ctx context.Context, output io.Writer, password []byte, 
 
 	v.logger.Debug("encrypted plaintext", slog.Int("plaintext.size", len(plainText)), slog.Int("ciphertext.size", len(cipherText)))
 
-	if len(cipherText) > format.MaxCipherTextSize {
-		return fmt.Errorf("ciphertext must be smaller than %d bytes", format.MaxCipherTextSize)
-	}
-
 	if err := format.EncodeHeader(
 		output,
 		hmac.New(sha256.New, hmacKey),
@@ -114,7 +117,7 @@ func (v *Vault) Encrypt(ctx context.Context, output io.Writer, password []byte, 
 		},
 		uint16(len(cipherText)),
 	); err != nil {
-		return err
+		return fmt.Errorf("encode header: %w", err)
 	}
 
 	if _, err := output.Write(cipherText); err != nil {
@@ -137,7 +140,7 @@ func (v *Vault) Decrypt(ctx context.Context, input io.Reader, password []byte) (
 
 	header, r, err := format.ParseHeader(input)
 	if err != nil {
-		return nil, fmt.Errorf("reading header: %w", err)
+		return nil, fmt.Errorf("parse header: %w", err)
 	}
 
 	internalKDFParams := krypto.Argon2idParams{
@@ -151,33 +154,33 @@ func (v *Vault) Decrypt(ctx context.Context, input io.Reader, password []byte) (
 
 	hmacKey, err := v.deriveHMACKey(ctx, password, header.Salt[:], krypto.ChaCha20KeySize)
 	if err != nil {
-		return nil, fmt.Errorf("hmac key derivation failed: %w", err)
+		return nil, fmt.Errorf("hmac key derivation: %w", err)
 	}
 
 	if err := format.ValidateHMAC(header, hmac.New(sha256.New, hmacKey)); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("validate header: %w", err)
 	}
 
 	key, err := v.deriveEncryptionKey(ctx, password, header.Salt[:], internalKDFParams, krypto.ChaCha20KeySize)
 	if err != nil {
-		return nil, fmt.Errorf("ciphertext key derivation failed: %w", err)
+		return nil, fmt.Errorf("ciphertext key derivation: %w", err)
 	}
 
 	cipher, err := krypto.NewChaCha20Crypto(key)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create cipher: %w", err)
+		return nil, fmt.Errorf("create cipher: %w", err)
 	}
 
 	cipherText, err := format.ReadCipherText(r, header)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read ciphertext: %w", err)
 	}
 
 	v.logger.Debug("decrypting ciphertext", slog.Int("ciphertext.size", len(cipherText)))
 
 	plainText, err := cipher.Decrypt(ctx, cipherText, header.Nonce[:], nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt ciphertext: %w", err)
+		return nil, fmt.Errorf("decrypt ciphertext: %w", err)
 	}
 
 	return plainText, nil

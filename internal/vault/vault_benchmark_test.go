@@ -37,10 +37,8 @@ func BenchmarkDecryptV1(b *testing.B) {
 func setupBenchmark(b *testing.B) (*vault.Vault, []byte, []byte) {
 	b.Helper()
 
-	v := setupVault(b)
-
-	password := []byte("benchmark-password")
 	plainText := []byte("hello, world!")
+	v, password := setupVault(b)
 
 	return v, password, plainText
 }

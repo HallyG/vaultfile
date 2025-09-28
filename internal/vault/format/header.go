@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
-	"math"
 )
 
 const (
@@ -17,7 +16,6 @@ const (
 	TotalPayloadLengthLen = 2
 	HMACLen               = sha256.Size
 	TotalHeaderLen        = MagicNumberLen + VersionLen + SaltLen + NonceLen + KDFParamsLen + TotalPayloadLengthLen + HMACLen
-	MaxCipherTextSize     = math.MaxUint16
 )
 
 // Validate checks if the Header fields are valid.
@@ -31,7 +29,7 @@ func (h *Header) Validate() error {
 	}
 
 	if h.TotalPayloadLength < uint16(TotalHeaderLen) {
-		return fmt.Errorf("total payload length must be at least %d bytes, got %d", h.TotalPayloadLength, TotalHeaderLen)
+		return fmt.Errorf("total payload length must be at least %d bytes, got %d", TotalHeaderLen, h.TotalPayloadLength)
 	}
 
 	return nil
@@ -93,10 +91,12 @@ func (h *Header) UnmarshalBinary(data []byte) error {
 	copy(h.Nonce[:], data[offset:offset+NonceLen])
 	offset += NonceLen
 
-	if err := h.KDFParams.UnmarshalBinary(data[offset : offset+KDFParamsLen]); err != nil {
+	copy(h.rawKDFParams[:], data[offset:offset+NonceLen])
+	offset += KDFParamsLen
+
+	if err := h.KDFParams.UnmarshalBinary(h.rawKDFParams[:]); err != nil {
 		return fmt.Errorf("unmarshal KDF params: %w", err)
 	}
-	offset += KDFParamsLen
 
 	h.TotalPayloadLength = binary.BigEndian.Uint16(data[offset : offset+TotalPayloadLengthLen])
 	offset += TotalPayloadLengthLen

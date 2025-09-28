@@ -10,9 +10,9 @@ package format_test
 		data[format.MagicNumberLen] = byte(format.VersionV1)
 
 		header, reader, err := format.ParseHeader(bytes.NewReader(data))
-		assert.Nil(t, header)
-		assert.Nil(t, reader)
-		assert.EqualError(t, err, `unmarshal header: invalid: magic number: expected "HGVF", got "XXXX"`)
+		require.Nil(t, header)
+		require.Nil(t, reader)
+		require.EqualError(t, err, `unmarshal header: invalid: magic number: expected "HGVF", got "XXXX"`)
 	})
 
 	t.Run("returns error when version is invalid", func(t *testing.T) {
@@ -23,9 +23,9 @@ package format_test
 		data[format.MagicNumberLen] = 99
 
 		header, reader, err := format.ParseHeader(bytes.NewReader(data))
-		assert.Nil(t, header)
-		assert.Nil(t, reader)
-		assert.EqualError(t, err, "unmarshal header: invalid: version: expected v1, got v99")
+		require.Nil(t, header)
+		require.Nil(t, reader)
+		require.EqualError(t, err, "unmarshal header: invalid: version: expected v1, got v99")
 	})
 */
 

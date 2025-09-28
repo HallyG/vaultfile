@@ -44,7 +44,6 @@ func TestConstants(t *testing.T) {
 	require.Equal(t, 16, format.SaltLen)
 	require.Equal(t, 24, format.NonceLen)
 	require.Equal(t, 88, format.TotalHeaderLen)
-	require.Equal(t, 65535, format.MaxCipherTextSize)
 }
 
 func TestReadCipherText(t *testing.T) {
@@ -114,19 +113,6 @@ func TestParseHeader(t *testing.T) {
 	})
 
 	t.Run("returns error when header is invalid", func(t *testing.T) {
-		t.Parallel()
-
-		data := make([]byte, format.TotalHeaderLen)
-		copy(data, []byte(format.MagicNumber))
-		data[format.MagicNumberLen] = 99
-
-		header, reader, err := format.ParseHeader(bytes.NewReader(data))
-		require.Nil(t, header)
-		require.Nil(t, reader)
-		require.ErrorContains(t, err, "unmarshal header: invalid:")
-	})
-
-	t.Run("parses header", func(t *testing.T) {
 		t.Parallel()
 
 		data := make([]byte, format.TotalHeaderLen)

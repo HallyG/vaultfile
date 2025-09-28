@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/HallyG/vaultfile/internal/vault/format"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -31,13 +30,13 @@ func TestValidateHMAC(t *testing.T) {
 		mac := hmac.New(sha256.New, []byte("test-key"))
 		computedMAC, err := format.ComputeHMAC(header, mac)
 		require.NoError(t, err)
-		assert.Len(t, computedMAC, sha256.Size)
+		require.Len(t, computedMAC, sha256.Size)
 
 		copy(header.HMAC[:], computedMAC)
 
 		mac = hmac.New(sha256.New, []byte("test-key"))
 		err = format.ValidateHMAC(header, mac)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("error when invalid MAC", func(t *testing.T) {
@@ -48,6 +47,6 @@ func TestValidateHMAC(t *testing.T) {
 
 		mac := hmac.New(sha256.New, []byte("test-key"))
 		err := format.ValidateHMAC(header, mac)
-		assert.EqualError(t, err, "invalid HMAC")
+		require.EqualError(t, err, "invalid HMAC")
 	})
 }

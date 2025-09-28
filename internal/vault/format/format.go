@@ -1,6 +1,8 @@
 package format
 
 import (
+	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"hash"
@@ -35,8 +37,10 @@ func ParseHeader(input io.Reader) (*Header, io.Reader, error) {
 		return nil, nil, errors.New("input reader cannot be nil")
 	}
 
+	r := bufio.NewReader(input)
+
 	headerBuf := make([]byte, TotalHeaderLen)
-	n, err := io.ReadFull(input, headerBuf)
+	n, err := io.ReadFull(r, headerBuf)
 	if err != nil {
 		if err == io.EOF || errors.Is(err, io.ErrUnexpectedEOF) {
 			err = fmt.Errorf("truncated: expected %d bytes, read %d: %w", TotalHeaderLen, n, err)
@@ -50,17 +54,13 @@ func ParseHeader(input io.Reader) (*Header, io.Reader, error) {
 		return nil, nil, fmt.Errorf("unmarshal header: %w", err)
 	}
 
-	/*
-			buf, err := r.Peek(r.Buffered())
-		if err != nil {
-			return nil, nil, fmt.Errorf("internal error: %w", err)
-		}
+	buf, err := r.Peek(r.Buffered())
+	if err != nil {
+		return nil, nil, fmt.Errorf("peek: %w", err)
+	}
 
-		payload := io.MultiReader(bytes.NewReader(buf), input)
-		return &header, payload, nil
-	*/
-
-	return &header, input, nil
+	payload := io.MultiReader(bytes.NewReader(buf), input)
+	return &header, payload, nil
 }
 
 // EncodeHeader encodes a Header to an io.Writer, updating the provided HMAC hash.
