@@ -57,21 +57,21 @@ func newCommand(name string, short string, example string, confirmPassword bool,
 		Short:   short,
 		Example: example,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			logger := slog.Default()
+			v, err := vault.New(vault.WithLogger(logger))
+			if err != nil {
+				return fmt.Errorf("create vault: %w", err)
+			}
+
 			// TODO: respect context
 			inputBytes, err := io.ReadAll(cmd.InOrStdin())
 			if err != nil {
 				return fmt.Errorf("read input: %w", err)
 			}
 
-			password, err := PromptPassword(os.Stderr, confirmPassword)
+			password, err := PromptPassword(os.Stderr, confirmPassword, logger)
 			if err != nil {
 				return fmt.Errorf("read password: %w", err)
-			}
-
-			logger := slog.Default()
-			v, err := vault.New(vault.WithLogger(logger))
-			if err != nil {
-				return fmt.Errorf("create vault: %w", err)
 			}
 
 			return runFn(cmd.Context(), v, inputBytes, password, cmd.OutOrStdout())

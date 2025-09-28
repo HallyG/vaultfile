@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 
 	"golang.org/x/term"
@@ -13,7 +14,7 @@ import (
 // PromptPassword prompts for and reads a password from the terminal.
 // When stdin is being used for piped data, it automatically opens /dev/tty
 // to read the password directly from the terminal instead.
-func PromptPassword(promptOutput io.Writer, confirmPassword bool) ([]byte, error) {
+func PromptPassword(promptOutput io.Writer, confirmPassword bool, logger *slog.Logger) ([]byte, error) {
 	if promptOutput == nil {
 		return nil, errors.New("output writer cannot be nil")
 	}
@@ -26,7 +27,11 @@ func PromptPassword(promptOutput io.Writer, confirmPassword bool) ([]byte, error
 		if err != nil {
 			return nil, fmt.Errorf("allocating terminal for password input: %w", err)
 		}
-		defer tty.Close()
+		defer func() {
+			if err := tty.Close(); err != nil {
+				logger.Warn("failed to close allocated terminal", slog.Any("err", err))
+			}
+		}()
 
 		fd = int(tty.Fd())
 	}
