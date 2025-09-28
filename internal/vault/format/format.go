@@ -26,9 +26,6 @@ const (
 	versionLen                 = 1
 	SaltLen                    = 16
 	NonceLen                   = 24
-	kdfMemoryLen               = 4
-	kdfIterationsLen           = 4
-	kdfThreadsLen              = 1
 	totalFileLengthLen         = 2
 	hmacLen                    = sha256.Size
 	TotalHeaderLen             = magicNumberLen + versionLen + SaltLen + NonceLen + KDFParamsLen + totalFileLengthLen + hmacLen
