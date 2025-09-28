@@ -12,10 +12,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const (
-	defaultFilePermissions = 0600
-)
-
 var (
 	BuildVersion  = `(missing)`
 	BuildShortSHA = `(missing)`
