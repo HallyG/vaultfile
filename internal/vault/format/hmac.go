@@ -30,15 +30,15 @@ func ComputeHMAC(header *Header, mac hash.Hash) ([]byte, error) {
 		return nil, fmt.Errorf("version: %w", err)
 	}
 
-	if _, err := mac.Write(header.CipherTextKeySalt[:]); err != nil {
+	if _, err := mac.Write(header.Salt[:]); err != nil {
 		return nil, fmt.Errorf("salt: %w", err)
 	}
 
-	if _, err := mac.Write(header.CipherTextKeyNonce[:]); err != nil {
+	if _, err := mac.Write(header.Nonce[:]); err != nil {
 		return nil, fmt.Errorf("nonce: %w", err)
 	}
 
-	if _, err := mac.Write(header.cipherTextKeyKDFParamsRaw[:]); err != nil {
+	if _, err := mac.Write(header.rawKDFParams[:]); err != nil {
 		return nil, fmt.Errorf("KDF params: %w", err)
 	}
 

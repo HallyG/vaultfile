@@ -52,13 +52,13 @@ func (h *Header) MarshalBinary() ([]byte, error) {
 	buf[offset] = byte(h.Version)
 	offset += VersionLen
 
-	copy(buf[offset:offset+SaltLen], h.CipherTextKeySalt[:])
+	copy(buf[offset:offset+SaltLen], h.Salt[:])
 	offset += SaltLen
 
-	copy(buf[offset:offset+NonceLen], h.CipherTextKeyNonce[:])
+	copy(buf[offset:offset+NonceLen], h.Nonce[:])
 	offset += NonceLen
 
-	kdfParamsBytes, err := h.CipherTextKeyKDFParams.MarshalBinary()
+	kdfParamsBytes, err := h.KDFParams.MarshalBinary()
 	if err != nil {
 		return nil, fmt.Errorf("marshal KDF params: %w", err)
 	}
@@ -87,13 +87,13 @@ func (h *Header) UnmarshalBinary(data []byte) error {
 	h.Version = Version(data[offset])
 	offset += VersionLen
 
-	copy(h.CipherTextKeySalt[:], data[offset:offset+SaltLen])
+	copy(h.Salt[:], data[offset:offset+SaltLen])
 	offset += SaltLen
 
-	copy(h.CipherTextKeyNonce[:], data[offset:offset+NonceLen])
+	copy(h.Nonce[:], data[offset:offset+NonceLen])
 	offset += NonceLen
 
-	if err := h.CipherTextKeyKDFParams.UnmarshalBinary(data[offset : offset+KDFParamsLen]); err != nil {
+	if err := h.KDFParams.UnmarshalBinary(data[offset : offset+KDFParamsLen]); err != nil {
 		return fmt.Errorf("unmarshal KDF params: %w", err)
 	}
 	offset += KDFParamsLen

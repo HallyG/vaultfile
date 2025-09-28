@@ -15,10 +15,10 @@ func TestValidateHMAC(t *testing.T) {
 
 	createHeader := func() *format.Header {
 		return &format.Header{
-			MagicNumber:        [4]byte{'H', 'G', 'V', 'F'},
-			Version:            format.VersionV1,
-			CipherTextKeySalt:  [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
-			CipherTextKeyNonce: [24]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24},
+			MagicNumber: [4]byte{'H', 'G', 'V', 'F'},
+			Version:     format.VersionV1,
+			Salt:        [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			Nonce:       [24]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24},
 			// CipherTextKeyKDFParamsRaw: [9]byte{0, 1, 0, 0, 0, 0, 0, 3, 4},
 			TotalPayloadLength: 200,
 		}

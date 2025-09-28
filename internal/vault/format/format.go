@@ -19,14 +19,14 @@ const (
 )
 
 type Header struct {
-	MagicNumber               [MagicNumberLen]byte
-	Version                   Version
-	CipherTextKeySalt         [SaltLen]byte
-	CipherTextKeyNonce        [NonceLen]byte
-	CipherTextKeyKDFParams    KDFParams
-	cipherTextKeyKDFParamsRaw [KDFParamsLen]byte
-	TotalPayloadLength        uint16
-	HMAC                      [HMACLen]byte
+	MagicNumber        [MagicNumberLen]byte
+	Version            Version
+	Salt               [SaltLen]byte
+	Nonce              [NonceLen]byte
+	KDFParams          KDFParams
+	rawKDFParams       [KDFParamsLen]byte
+	TotalPayloadLength uint16
+	HMAC               [HMACLen]byte
 }
 
 // ParseHeader parses a Header from an [io.Reader] and returns the header and a reader for the remaining data.
@@ -70,19 +70,19 @@ func EncodeHeader(output io.Writer, mac hash.Hash, salt [SaltLen]byte, nonce [No
 	}
 
 	if mac == nil {
-		return errors.New("HMAC hash cannot be nil")
+		return errors.New("hmac hash cannot be nil")
 	}
 
 	var magicNumber [MagicNumberLen]byte
 	copy(magicNumber[:], MagicNumber)
 
 	header := Header{
-		MagicNumber:            magicNumber,
-		Version:                VersionV1,
-		CipherTextKeySalt:      salt,
-		CipherTextKeyNonce:     nonce,
-		CipherTextKeyKDFParams: kdfParams,
-		TotalPayloadLength:     uint16(TotalHeaderLen) + cipherTextLen,
+		MagicNumber:        magicNumber,
+		Version:            VersionV1,
+		Salt:               salt,
+		Nonce:              nonce,
+		KDFParams:          kdfParams,
+		TotalPayloadLength: uint16(TotalHeaderLen) + cipherTextLen,
 	}
 
 	// Marshal header without HMAC

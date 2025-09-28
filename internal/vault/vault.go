@@ -141,15 +141,15 @@ func (v *Vault) Decrypt(ctx context.Context, input io.Reader, password []byte) (
 	}
 
 	internalKDFParams := krypto.Argon2idParams{
-		MemoryKiB:     header.CipherTextKeyKDFParams.MemoryKiB,
-		NumIterations: header.CipherTextKeyKDFParams.NumIterations,
-		NumThreads:    header.CipherTextKeyKDFParams.NumThreads,
+		MemoryKiB:     header.KDFParams.MemoryKiB,
+		NumIterations: header.KDFParams.NumIterations,
+		NumThreads:    header.KDFParams.NumThreads,
 	}
 	if err := internalKDFParams.Validate(ctx); err != nil {
 		return nil, fmt.Errorf("invalid KDF parameters: %w", err)
 	}
 
-	hmacKey, err := v.deriveHMACKey(ctx, password, header.CipherTextKeySalt[:], krypto.ChaCha20KeySize)
+	hmacKey, err := v.deriveHMACKey(ctx, password, header.Salt[:], krypto.ChaCha20KeySize)
 	if err != nil {
 		return nil, fmt.Errorf("hmac key derivation failed: %w", err)
 	}
@@ -158,7 +158,7 @@ func (v *Vault) Decrypt(ctx context.Context, input io.Reader, password []byte) (
 		return nil, err
 	}
 
-	key, err := v.deriveEncryptionKey(ctx, password, header.CipherTextKeySalt[:], internalKDFParams, krypto.ChaCha20KeySize)
+	key, err := v.deriveEncryptionKey(ctx, password, header.Salt[:], internalKDFParams, krypto.ChaCha20KeySize)
 	if err != nil {
 		return nil, fmt.Errorf("ciphertext key derivation failed: %w", err)
 	}
@@ -175,7 +175,7 @@ func (v *Vault) Decrypt(ctx context.Context, input io.Reader, password []byte) (
 
 	v.logger.Debug("decrypting ciphertext", slog.Int("ciphertext.size", len(cipherText)))
 
-	plainText, err := cipher.Decrypt(ctx, cipherText, header.CipherTextKeyNonce[:], nil)
+	plainText, err := cipher.Decrypt(ctx, cipherText, header.Nonce[:], nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decrypt ciphertext: %w", err)
 	}
