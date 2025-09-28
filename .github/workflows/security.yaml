@@ -2,6 +2,9 @@ name: GO Security Check
 
 on:
   workflow_call:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '0 0 * * *' # Every night midnight UTC
 
 jobs:
   check-for-vulnerabilities:
