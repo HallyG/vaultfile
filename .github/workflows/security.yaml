@@ -1,0 +1,31 @@
+name: GO Security Check
+
+on:
+  workflow_call:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '0 0 * * *' # Every night midnight UTC
+
+jobs:
+  check-for-vulnerabilities:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+      - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+          cache-dependency-path: go.sum
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+        shell: bash
+      - name: Run govulncheck
+        run: govulncheck -C . -format sarif ./... > govulncheck.sarif
+      - name: Upload govulncheck result
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: govulncheck-${{ github.run_number }}
+          path: govulncheck.sarif
+          retention-days: 1

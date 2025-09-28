@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 
 	"github.com/HallyG/vaultfile/internal/vault"
 	"github.com/spf13/cobra"
@@ -169,6 +170,8 @@ func decrypt(ctx context.Context, v *vault.Vault, input []byte, password []byte,
 }
 
 func readInput(path string) ([]byte, error) {
+	path = filepath.Clean(path)
+
 	if path == "" {
 		return nil, fmt.Errorf("input file is required")
 	}
@@ -177,6 +180,8 @@ func readInput(path string) ([]byte, error) {
 }
 
 func openOutput(path string, force bool) (io.Writer, func() error, error) {
+	path = filepath.Clean(path)
+
 	if path == "" {
 		return os.Stdout, func() error { return nil }, nil
 	}

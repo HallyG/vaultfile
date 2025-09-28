@@ -18,6 +18,7 @@ GO_COVERAGE_TEXT_FILE := $(BUILD_DIR)/cover.txt
 GO_COVERAGE_HTML_FILE := $(BUILD_DIR)/cover.html
 GOLANGCI_CMD := go tool golangci-lint
 GOLANGCI_ARGS ?= --fix --concurrency=4
+GOVULN_CMD := go tool govulncheck
 
 .PHONY: help
 help:
@@ -49,6 +50,7 @@ test/cover:
 .PHONY: lint
 lint:
 	@$(GO_CMD) vet ${GO_PKGS}
+	@$(GOVULN_CMD) 
 	@${GOLANGCI_CMD} run ${GOLANGCI_ARGS} ${GO_PKGS}
 
 ## audit: format, vet, and lint Go code

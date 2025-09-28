@@ -15,9 +15,10 @@ import (
 )
 
 const (
+	MaxCipherTextSize = math.MaxUint16 - format.TotalHeaderLen
 	// Assumes we are using [krypto.NewChaCha20Crypto] because XChaCha20-Poly1305 is a
 	// stream cipher (hence output=input bytes) with an additional 16 byte auth tag.
-	MaxCipherTextSize = math.MaxUint16 - 16 - format.TotalHeaderLen
+	MaxPlainTextSize = MaxCipherTextSize - 16
 )
 
 type Vault struct {
@@ -72,8 +73,8 @@ func (v *Vault) Encrypt(ctx context.Context, output io.Writer, password []byte, 
 		return errors.New("plaintext cannot be nil")
 	}
 
-	if len(plainText) > MaxCipherTextSize {
-		return fmt.Errorf("ciphertext exceeds maximum of %d bytes, got %d", MaxCipherTextSize, len(plainText))
+	if len(plainText) > MaxPlainTextSize {
+		return fmt.Errorf("plaintext exceeds maximum of %d bytes, got %d", MaxPlainTextSize, len(plainText))
 	}
 
 	salt, err := krypto.GenerateSalt(krypto.MinSaltLength)
@@ -105,6 +106,12 @@ func (v *Vault) Encrypt(ctx context.Context, output io.Writer, password []byte, 
 
 	v.logger.Debug("encrypted plaintext", slog.Int("plaintext.size", len(plainText)), slog.Int("ciphertext.size", len(cipherText)))
 
+	length := len(cipherText)
+	if length > MaxCipherTextSize || length > math.MaxUint16 {
+		return fmt.Errorf("ciphertext exceeds maximum of %d bytes, got %d", MaxCipherTextSize, len(plainText))
+	}
+
+	// #nosec G115 - length is guaranteed to be < 65536
 	if err := format.EncodeHeader(
 		output,
 		hmac.New(sha256.New, hmacKey),

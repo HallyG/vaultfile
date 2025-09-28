@@ -94,14 +94,14 @@ func TestV1FormatEncrypt(t *testing.T) {
 		require.EqualError(t, err, "hmac key derivation failed: password length must be at least 1 characters, got 0")
 	})
 
-	t.Run("returns error when ciphertext too big", func(t *testing.T) {
+	t.Run("returns error when plaintext too big", func(t *testing.T) {
 		t.Parallel()
 
 		v, password := setupVault(t)
 
 		var buf bytes.Buffer
 		err := v.Encrypt(t.Context(), &buf, password, make([]byte, math.MaxUint16))
-		require.EqualError(t, err, "ciphertext exceeds maximum of 65431 bytes, got 65535")
+		require.EqualError(t, err, "plaintext exceeds maximum of 65431 bytes, got 65535")
 	})
 
 	t.Run("returns error when context cancellation", func(t *testing.T) {
@@ -182,7 +182,7 @@ func TestV1FormatEncrypt(t *testing.T) {
 	t.Run("encrypt plaintext at maximum length", func(t *testing.T) {
 		t.Parallel()
 
-		plainText := make([]byte, vault.MaxCipherTextSize)
+		plainText := make([]byte, vault.MaxPlainTextSize)
 		v, password := setupVault(t)
 
 		var buf bytes.Buffer
