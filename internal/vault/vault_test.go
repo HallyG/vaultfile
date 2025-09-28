@@ -114,7 +114,7 @@ func TestV1Format(t *testing.T) {
 
 		var buf bytes.Buffer
 		err := v.Encrypt(t.Context(), &buf, password, make([]byte, math.MaxUint16))
-		require.ErrorContains(t, err, "ciphertext must be smaller than 65535 bytes")
+		require.ErrorContains(t, err, "plaintext exceeds maximum of 65471 bytes, got 65535")
 	})
 
 	t.Run("returns error when decrypt with truncated ciphertext", func(t *testing.T) {

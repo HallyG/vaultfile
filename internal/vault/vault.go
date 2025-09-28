@@ -63,6 +63,12 @@ func (v *Vault) Encrypt(ctx context.Context, output io.Writer, password []byte, 
 		return errors.New("plaintext cannot be nil")
 	}
 
+	// Assumes we are using [krypto.NewChaCha20Crypto] because XChaCha20-Poly1305 is a
+	// stream cipher (hence output=input bytes) with an additional 16 byte auth tag.
+	if len(plainText) > format.MaxCipherTextSize-16 {
+		return fmt.Errorf("plaintext exceeds maximum of %d bytes, got %d", format.MaxCipherTextSize-64, len(plainText))
+	}
+
 	salt, err := krypto.GenerateSalt(krypto.MinSaltLength)
 	if err != nil {
 		return fmt.Errorf("failed to generate salt: %w", err)
