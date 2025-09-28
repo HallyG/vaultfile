@@ -6,6 +6,10 @@ run:
   timeout: 3m
 linters:
   default: standard
+  enable:
+    - paralleltest
+    - thelper
+    - tparallel
 formatters:
   enable:
     - gofmt
