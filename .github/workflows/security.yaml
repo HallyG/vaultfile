@@ -1,0 +1,23 @@
+name: GO Security Check
+
+on:
+  workflow_call:
+
+jobs:
+  check-for-vulnerabilities:
+    runs-on: ubuntu-24.04
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - uses: golang/govulncheck-action@b625fbe08f3bccbe446d94fbf87fcc875a4f50ee
+        with:
+          cache-dependency-path: go.sum
+          output-format: sarif
+          output-file: govulncheck.sarif
+      - name: Upload static analysis result
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: govulncheck-${{ github.run_number }}
+          path: govulncheck.sarif
+          retention-days: 1
