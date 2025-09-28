@@ -160,14 +160,14 @@ func TestValidateMAC(t *testing.T) {
 
 		header := createHeader()
 		mac := hmac.New(sha256.New, []byte("test-key"))
-		computedMAC, err := ComputeMAC(header, mac)
+		computedMAC, err := ComputeHMAC(header, mac)
 		require.NoError(t, err)
 		assert.Len(t, computedMAC, sha256.Size)
 
 		copy(header.HMAC[:], computedMAC)
 
 		mac = hmac.New(sha256.New, []byte("test-key"))
-		err = ValidateMAC(header, mac)
+		err = ValidateHMAC(header, mac)
 		assert.NoError(t, err)
 	})
 
@@ -178,7 +178,7 @@ func TestValidateMAC(t *testing.T) {
 		header.HMAC = [32]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}
 
 		mac := hmac.New(sha256.New, []byte("test-key"))
-		err := ValidateMAC(header, mac)
+		err := ValidateHMAC(header, mac)
 		assert.EqualError(t, err, "invalid HMAC")
 	})
 }

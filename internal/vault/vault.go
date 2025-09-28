@@ -154,7 +154,7 @@ func (v *Vault) Decrypt(ctx context.Context, input io.Reader, password []byte) (
 		return nil, fmt.Errorf("hmac key derivation failed: %w", err)
 	}
 
-	if err := format.ValidateMAC(header, hmac.New(sha256.New, hmacKey)); err != nil {
+	if err := format.ValidateHMAC(header, hmac.New(sha256.New, hmacKey)); err != nil {
 		return nil, err
 	}
 
