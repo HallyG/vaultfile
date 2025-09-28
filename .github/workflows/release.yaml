@@ -40,7 +40,7 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
       - name: Run tests
-        run: go test ./... -timeout 30s -race
+        run: go test ./... -timeout 60s -race
   release:
     needs: [lint, tests]
     if: startsWith(github.ref, 'refs/tags/')
