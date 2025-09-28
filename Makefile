@@ -9,8 +9,8 @@ GO_CMD ?= go
 GO_BUILD_TAGS =
 GO_LDFLAGS ?= -s -w -buildid= -X 'github.com/HallyG/${APP_NAME}/cmd/vaultfile.BuildShortSHA=$(BUILD_SHORT_SHA)' -X 'github.com/HallyG/${APP_NAME}/cmd/vaultfile.BuildVersion=$(BUILD_VERSION)'
 GO_PKG_MAIN := ${PWD}/main.go
-GO_PKGS := $(PWD)/internal/... $(PWD)/cmd/... 
-EXCLUDE_PKGS := github.com/HallyG/vaultfile/cmd/vaultfile
+GO_PKGS := $(shell go list -f '{{.Dir}}' ./... )
+EXCLUDE_PKGS := github.com/HallyG/vaultfile github.com/HallyG/vaultfile/cmd/vaultfile github.com/HallyG/vaultfile/examples/basic
 GO_COVERAGE_PKGS := $(filter-out $(EXCLUDE_PKGS), $(shell go list $(GO_PKGS)))
 GO_COVERAGE_FILE := $(BUILD_DIR)/cover.out
 GO_COVERAGE_TEXT_FILE := $(BUILD_DIR)/cover.txt
