@@ -31,21 +31,26 @@ jobs:
             echo "::error::Version '$VERSION' must follow semantic versioning (e.g., v1.2.3)"
             exit 1
           fi
-          echo "::notice::Version format is valid: $VERSION"
         env:
           VERSION: ${{ github.event.inputs.version }}
-      - name: Check tag existence
+      - name: Check version does not already exist
         run: |
           if git tag -l | grep -q "^$VERSION$"; then
-            echo "::error::Tag $VERSION already exists locally"
+            echo "::error::Tag $VERSION already exists"
             exit 1
-          fi
-          
-          if git ls-remote --tags origin | grep -q "refs/tags/$VERSION$"; then
-            echo "::error::Tag $VERSION already exists on remote"
-            exit 1
-          fi
-          
-          echo "::notice::Tag $VERSION is available"
+          fi  
         env:
           VERSION: ${{ github.event.inputs.version }}
+      - name: Create and push tag with version
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+
+          git tag -a "$VERSION" -m "Release $VERSION"
+          git push origin "$VERSION"
+          
+          echo "::notice::Successfully created and pushed tag $VERSION"
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
