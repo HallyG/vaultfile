@@ -19,6 +19,7 @@ GO_COVERAGE_HTML_FILE := $(BUILD_DIR)/cover.html
 GOLANGCI_CMD := go tool golangci-lint
 GOLANGCI_ARGS ?= --fix --concurrency=4
 GOVULN_CMD := go tool govulncheck
+GORELEASER_CMD := @goreleaser
 
 .PHONY: help
 help:
@@ -31,6 +32,7 @@ clean:
 	@rm -f ${BUILD_DIR}/${APP_NAME};
 	@rm -f ${GO_COVERAGE_FILE} ${GO_COVERAGE_TEXT_FILE} ${GO_COVERAGE_HTML_FILE}
 	@$(GO_CMD) clean
+	@$(GORELEASER_CMD) release --clean
 
 ## test: run tests
 .PHONY: test
@@ -89,4 +91,4 @@ release/tag:
 ## release/dry: release (dry-run)
 .PHONY: release/dry 
 release/dry:
-	goreleaser release --clean --snapshot
+	$(GORELEASER_CMD) release --clean --snapshot
