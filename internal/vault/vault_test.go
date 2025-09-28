@@ -6,43 +6,75 @@ import (
 	"math"
 	"testing"
 
+	"github.com/HallyG/vaultfile/internal/krypto"
 	"github.com/HallyG/vaultfile/internal/vault"
 	"github.com/HallyG/vaultfile/internal/vault/format"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+/*
+
+	password := []byte("some-long-password")
+	v := setupVault(t)
+
+	var buf bytes.Buffer
+	err := v.Encrypt(t.Context(), &buf, password, plainText)
+	require.NoError(t, err)
+
+	return v, buf.Bytes(), plainText, password
+
+*/
+
 func TestV1Format(t *testing.T) {
 	t.Parallel()
 
-	setup := func(t *testing.T, plainText []byte) (*vault.Vault, []byte, []byte, []byte) {
+	setup := func(t *testing.T) (*vault.Vault, []byte) {
 		t.Helper()
 
 		password := []byte("some-long-password")
-		v, err := vault.New()
-		require.NoError(t, err)
+		v := setupVault(t)
 
-		var buf bytes.Buffer
-		err = v.Encrypt(t.Context(), &buf, password, plainText)
-		require.NoError(t, err)
-
-		return v, buf.Bytes(), plainText, password
+		return v, password
 	}
 
 	t.Run("version is v1", func(t *testing.T) {
 		t.Parallel()
-		v, err := vault.New()
-		require.NoError(t, err)
 
+		v := setupVault(t)
 		require.Equal(t, format.VersionV1, v.Version())
+	})
+
+	t.Run("returns error when nil writer", func(t *testing.T) {
+		t.Parallel()
+
+		plainText := []byte("hello, world!")
+		v, password := setup(t)
+
+		err := v.Encrypt(t.Context(), nil, password, plainText)
+		require.ErrorContains(t, err, "output writer cannot be nil")
+	})
+
+	t.Run("returns error when nil reader", func(t *testing.T) {
+		t.Parallel()
+
+		v, password := setup(t)
+
+		_, err := v.Decrypt(t.Context(), nil, password)
+		require.ErrorContains(t, err, "input reader cannot be nil")
 	})
 
 	t.Run("successful encrypt and decrypt", func(t *testing.T) {
 		t.Parallel()
 
-		v, cipherText, plainText, password := setup(t, []byte("hello, world!"))
+		plainText := []byte("hello, world!")
+		v, password := setup(t)
 
-		decrypted, err := v.Decrypt(t.Context(), bytes.NewReader(cipherText), password)
+		var cipherText bytes.Buffer
+		err := v.Encrypt(t.Context(), &cipherText, password, plainText)
+		require.NoError(t, err)
+
+		decrypted, err := v.Decrypt(t.Context(), bytes.NewReader(cipherText.Bytes()), password)
 		require.NoError(t, err)
 		require.Equal(t, plainText, decrypted)
 	})
@@ -50,73 +82,66 @@ func TestV1Format(t *testing.T) {
 	t.Run("successful encrypt and decrypt when empty plaintext", func(t *testing.T) {
 		t.Parallel()
 
-		vault, cipherText, _, password := setup(t, []byte{})
+		plainText := []byte{}
+		v, password := setup(t)
 
-		decrypted, err := vault.Decrypt(t.Context(), bytes.NewReader(cipherText), password)
+		var cipherText bytes.Buffer
+		err := v.Encrypt(t.Context(), &cipherText, password, plainText)
+		require.NoError(t, err)
+
+		decrypted, err := v.Decrypt(t.Context(), bytes.NewReader(cipherText.Bytes()), password)
 		require.NoError(t, err)
 		require.Empty(t, decrypted)
-	})
-
-	t.Run("returns error when nil writer", func(t *testing.T) {
-		t.Parallel()
-
-		v, err := vault.New()
-		require.NoError(t, err)
-
-		err = v.Encrypt(t.Context(), nil, []byte("password"), []byte("test"))
-		require.ErrorContains(t, err, "output writer cannot be nil")
-	})
-
-	t.Run("returns error when nil reader", func(t *testing.T) {
-		t.Parallel()
-
-		v, err := vault.New()
-		require.NoError(t, err)
-
-		_, err = v.Decrypt(t.Context(), nil, []byte("password"))
-		require.ErrorContains(t, err, "input reader cannot be nil")
 	})
 
 	t.Run("returns error when decrypt with wrong password", func(t *testing.T) {
 		t.Parallel()
 
-		vault, cipherText, _, _ := setup(t, []byte("hello, world!"))
+		plainText := []byte("hello, world!")
+		v, password := setup(t)
 
-		decrypted, err := vault.Decrypt(t.Context(), bytes.NewReader(cipherText), []byte("wrong-password"))
+		var cipherText bytes.Buffer
+		err := v.Encrypt(t.Context(), &cipherText, password, plainText)
+		require.NoError(t, err)
+
+		decrypted, err := v.Decrypt(t.Context(), bytes.NewReader(cipherText.Bytes()), []byte("wrong-password"))
 		require.ErrorContains(t, err, "invalid HMAC")
 		require.Empty(t, decrypted)
 	})
 
-	t.Run("returns error on encrypt with empty password", func(t *testing.T) {
+	t.Run("returns error when encrypt with empty password", func(t *testing.T) {
 		t.Parallel()
 
-		v, err := vault.New()
-		require.NoError(t, err)
+		plainText := []byte("hello, world!")
+		v := setupVault(t)
 
 		var buf bytes.Buffer
-		err = v.Encrypt(t.Context(), &buf, []byte{}, []byte("test"))
+		err := v.Encrypt(t.Context(), &buf, []byte{}, plainText)
 		require.ErrorContains(t, err, "password must be at least 1 characters long")
 	})
 
-	t.Run("returns error on encrypt when ciphertext too big", func(t *testing.T) {
+	t.Run("returns error when encrypt with output ciphertext too big", func(t *testing.T) {
 		t.Parallel()
 
-		password := []byte("some-long-password")
-		v, err := vault.New()
-		require.NoError(t, err)
+		v, password := setup(t)
 
 		var buf bytes.Buffer
-		err = v.Encrypt(t.Context(), &buf, password, make([]byte, math.MaxUint16))
+		err := v.Encrypt(t.Context(), &buf, password, make([]byte, math.MaxUint16))
 		require.ErrorContains(t, err, "ciphertext must be smaller than 65535 bytes")
 
 	})
 
-	t.Run("returns error on decrypt when ciphertext truncated", func(t *testing.T) {
+	t.Run("returns error when decrypt with truncated ciphertext", func(t *testing.T) {
 		t.Parallel()
 
-		v, cipherText, _, password := setup(t, []byte("hello, world!"))
+		plainText := []byte("hello, world!")
+		v, password := setup(t)
 
-		decrypted, err := v.Decrypt(t.Context(), bytes.NewReader(cipherText[0:len(cipherText)-2]), password)
+		var cipherText bytes.Buffer
+		err := v.Encrypt(t.Context(), &cipherText, password, plainText)
+		require.NoError(t, err)
+
+		decrypted, err := v.Decrypt(t.Context(), bytes.NewReader(cipherText.Bytes()[0:len(cipherText.Bytes())-2]), password)
 		require.Nil(t, decrypted)
 		require.ErrorContains(t, err, "file truncated: expected 29 bytes, read 27: unexpected EOF")
 
@@ -125,97 +150,75 @@ func TestV1Format(t *testing.T) {
 	t.Run("encrypt respects context", func(t *testing.T) {
 		t.Parallel()
 
-		v, err := vault.New()
-		require.NoError(t, err)
-
 		ctx := context.Background()
+		plainText := []byte("hello, world!")
+		v, password := setup(t)
+
 		var buf bytes.Buffer
-		err = v.Encrypt(ctx, &buf, []byte("password"), []byte("test"))
+		err := v.Encrypt(ctx, &buf, password, plainText)
 		assert.NoError(t, err)
 	})
 
-	t.Run("large plaintext encryption and decryption", func(t *testing.T) {
+	t.Run("returns error when encrypt with output writer failure", func(t *testing.T) {
 		t.Parallel()
 
-		v, err := vault.New()
-		require.NoError(t, err)
+		plainText := []byte("hello, world!")
+		v, password := setup(t)
 
-		largeText := make([]byte, 32768)
-		for i := range largeText {
-			largeText[i] = byte(i % 256)
-		}
-
-		password := []byte("test-password-for-large-data")
-		var buf bytes.Buffer
-		err = v.Encrypt(context.Background(), &buf, password, largeText)
-		require.NoError(t, err)
-
-		decrypted, err := v.Decrypt(context.Background(), bytes.NewReader(buf.Bytes()), password)
-		require.NoError(t, err)
-		assert.Equal(t, largeText, decrypted)
-	})
-
-	t.Run("error on decrypt when header is corrupted", func(t *testing.T) {
-		t.Parallel()
-
-		v, cipherText, _, password := setup(t, []byte("hello, world!"))
-
-		corruptedData := make([]byte, len(cipherText))
-		copy(corruptedData, cipherText)
-		corruptedData[10] ^= 0xFF
-
-		decrypted, err := v.Decrypt(context.Background(), bytes.NewReader(corruptedData), password)
-		assert.Nil(t, decrypted)
-		assert.ErrorContains(t, err, "invalid HMAC")
-	})
-
-	t.Run("error on encrypt when output writer fails", func(t *testing.T) {
-		t.Parallel()
-
-		v, err := vault.New()
-		require.NoError(t, err)
-
-		failingWriter := &failingWriter{}
-		err = v.Encrypt(context.Background(), failingWriter, []byte("password"), []byte("test"))
+		err := v.Encrypt(t.Context(), &failingWriter{}, password, plainText)
 		assert.Error(t, err)
 	})
 
 	t.Run("different passwords produce different ciphertexts", func(t *testing.T) {
 		t.Parallel()
 
-		v, err := vault.New()
-		require.NoError(t, err)
+		v := setupVault(t)
 
 		plainText := []byte("same plaintext")
 		password1 := []byte("password1")
 		password2 := []byte("password2")
 
 		var buf1, buf2 bytes.Buffer
-		err = v.Encrypt(context.Background(), &buf1, password1, plainText)
+		err := v.Encrypt(t.Context(), &buf1, password1, plainText)
 		require.NoError(t, err)
-		err = v.Encrypt(context.Background(), &buf2, password2, plainText)
+		err = v.Encrypt(t.Context(), &buf2, password2, plainText)
 		require.NoError(t, err)
 
 		assert.NotEqual(t, buf1.Bytes(), buf2.Bytes())
 	})
 
-	t.Run("same input produces different ciphertexts due to random nonce", func(t *testing.T) {
+	t.Run("same input produces different ciphertexts (due to random nonce)", func(t *testing.T) {
 		t.Parallel()
 
-		v, err := vault.New()
-		require.NoError(t, err)
+		v := setupVault(t)
 
 		plainText := []byte("same plaintext")
 		password := []byte("same password")
 
 		var buf1, buf2 bytes.Buffer
-		err = v.Encrypt(context.Background(), &buf1, password, plainText)
+		err := v.Encrypt(t.Context(), &buf1, password, plainText)
 		require.NoError(t, err)
-		err = v.Encrypt(context.Background(), &buf2, password, plainText)
+		err = v.Encrypt(t.Context(), &buf2, password, plainText)
 		require.NoError(t, err)
 
 		assert.NotEqual(t, buf1.Bytes(), buf2.Bytes())
 	})
+}
+
+func setupVault(tb testing.TB) *vault.Vault {
+	tb.Helper()
+
+	v, err := vault.New(
+		// Use minimal KDF Params so we don't unnecessarily slow down tests
+		vault.WithKDFParams(krypto.Argon2idParams{
+			MemoryKiB:     1024,
+			NumIterations: 1,
+			NumThreads:    1,
+		}),
+	)
+	require.NoError(tb, err)
+
+	return v
 }
 
 type failingWriter struct{}

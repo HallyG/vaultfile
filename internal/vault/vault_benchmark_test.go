@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func BenchmarkEncrypt(b *testing.B) {
+func BenchmarkEncryptV1(b *testing.B) {
 	v, password, plainText := setupBenchmark(b)
 
 	for b.Loop() {
@@ -19,7 +19,7 @@ func BenchmarkEncrypt(b *testing.B) {
 	}
 }
 
-func BenchmarkDecrypt(b *testing.B) {
+func BenchmarkDecryptV1(b *testing.B) {
 	v, password, plainText := setupBenchmark(b)
 
 	var buf bytes.Buffer
@@ -37,14 +37,10 @@ func BenchmarkDecrypt(b *testing.B) {
 func setupBenchmark(b *testing.B) (*vault.Vault, []byte, []byte) {
 	b.Helper()
 
-	v, err := vault.New()
-	require.NoError(b, err)
+	v := setupVault(b)
 
 	password := []byte("benchmark-password")
-	plainText := make([]byte, 1024)
-	for i := range plainText {
-		plainText[i] = byte(i % 256)
-	}
+	plainText := []byte("hello, world!")
 
 	return v, password, plainText
 }

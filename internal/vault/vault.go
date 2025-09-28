@@ -24,6 +24,12 @@ func WithLogger(logger *slog.Logger) func(*Vault) {
 	}
 }
 
+func WithKDFParams(kdfParams krypto.Argon2idParams) func(*Vault) {
+	return func(v *Vault) {
+		v.kdfParams = &kdfParams
+	}
+}
+
 func New(opts ...func(*Vault)) (*Vault, error) {
 	v := &Vault{
 		kdfParams: krypto.DefaultArgon2idParams(),
