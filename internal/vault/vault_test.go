@@ -13,19 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-/*
-
-	password := []byte("some-long-password")
-	v := setupVault(t)
-
-	var buf bytes.Buffer
-	err := v.Encrypt(t.Context(), &buf, password, plainText)
-	require.NoError(t, err)
-
-	return v, buf.Bytes(), plainText, password
-
-*/
-
 func TestV1Format(t *testing.T) {
 	t.Parallel()
 
@@ -128,7 +115,6 @@ func TestV1Format(t *testing.T) {
 		var buf bytes.Buffer
 		err := v.Encrypt(t.Context(), &buf, password, make([]byte, math.MaxUint16))
 		require.ErrorContains(t, err, "ciphertext must be smaller than 65535 bytes")
-
 	})
 
 	t.Run("returns error when decrypt with truncated ciphertext", func(t *testing.T) {
@@ -156,7 +142,7 @@ func TestV1Format(t *testing.T) {
 
 		var buf bytes.Buffer
 		err := v.Encrypt(ctx, &buf, password, plainText)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("returns error when encrypt with output writer failure", func(t *testing.T) {
@@ -166,7 +152,7 @@ func TestV1Format(t *testing.T) {
 		v, password := setup(t)
 
 		err := v.Encrypt(t.Context(), &failingWriter{}, password, plainText)
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 
 	t.Run("different passwords produce different ciphertexts", func(t *testing.T) {
@@ -184,7 +170,7 @@ func TestV1Format(t *testing.T) {
 		err = v.Encrypt(t.Context(), &buf2, password2, plainText)
 		require.NoError(t, err)
 
-		assert.NotEqual(t, buf1.Bytes(), buf2.Bytes())
+		require.NotEqual(t, buf1.Bytes(), buf2.Bytes())
 	})
 
 	t.Run("same input produces different ciphertexts (due to random nonce)", func(t *testing.T) {
@@ -201,7 +187,7 @@ func TestV1Format(t *testing.T) {
 		err = v.Encrypt(t.Context(), &buf2, password, plainText)
 		require.NoError(t, err)
 
-		assert.NotEqual(t, buf1.Bytes(), buf2.Bytes())
+		require.NotEqual(t, buf1.Bytes(), buf2.Bytes())
 	})
 }
 

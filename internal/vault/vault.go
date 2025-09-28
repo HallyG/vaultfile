@@ -55,6 +55,14 @@ func (v *Vault) Encrypt(ctx context.Context, output io.Writer, password []byte, 
 		return errors.New("output writer cannot be nil")
 	}
 
+	if password == nil {
+		return errors.New("password cannot be nil")
+	}
+
+	if plainText == nil {
+		return errors.New("plaintext cannot be nil")
+	}
+
 	salt, err := krypto.GenerateSalt(krypto.MinSaltLength)
 	if err != nil {
 		return fmt.Errorf("failed to generate salt: %w", err)
@@ -113,6 +121,10 @@ func (v *Vault) Encrypt(ctx context.Context, output io.Writer, password []byte, 
 func (v *Vault) Decrypt(ctx context.Context, input io.Reader, password []byte) ([]byte, error) {
 	if input == nil {
 		return nil, errors.New("input reader cannot be nil")
+	}
+
+	if password == nil {
+		return nil, errors.New("password cannot be nil")
 	}
 
 	v.logger.Debug("parsing header")
