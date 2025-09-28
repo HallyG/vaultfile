@@ -10,84 +10,52 @@ import (
 	"golang.org/x/term"
 )
 
-// PasswordReader defines an interface for reading passwords from a terminal-like input.
-type PasswordReader interface {
-	// IsTerminal reports whether the input is a terminal (TTY).
-	IsTerminal() bool
-	// ReadPassword writes the prompt to the output and reads a password from the input.
-	ReadPassword(prompt string, output io.Writer) ([]byte, error)
-}
-
-type defaultPasswordReader struct{}
-
-func (d *defaultPasswordReader) IsTerminal() bool {
-	return term.IsTerminal(int(os.Stdin.Fd()))
-}
-
-// ReadPassword prompts for and reads a password from os.Stdin.
-func (d *defaultPasswordReader) ReadPassword(prompt string, output io.Writer) ([]byte, error) {
-	if _, err := fmt.Fprint(output, prompt); err != nil {
-		return nil, fmt.Errorf("failed to write prompt: %w", err)
-	}
-
-	password, err := term.ReadPassword(int(os.Stdin.Fd()))
-	if err != nil {
-		return nil, fmt.Errorf("failed to read password: %w", err)
-	}
-
-	if _, err := fmt.Fprintln(output); err != nil {
-		return nil, fmt.Errorf("failed to write newline: %w", err)
-	}
-
-	return password, nil
-}
-
-// PromptPassword reads a password from the input, optionally prompting for confirmation.
-// If reader is nil, it uses defaultPasswordReader (os.Stdin).
-func PromptPassword(reader PasswordReader, output io.Writer, confirm bool) ([]byte, error) {
-	if reader == nil {
-		reader = &defaultPasswordReader{}
-	}
-
-	if output == nil {
+// PromptPassword prompts for and reads a password from the terminal.
+// When stdin is being used for piped data, it automatically opens /dev/tty
+// to read the password directly from the terminal instead.
+func PromptPassword(promptOutput io.Writer, confirmPassword bool) ([]byte, error) {
+	if promptOutput == nil {
 		return nil, errors.New("output writer cannot be nil")
 	}
 
-	if !reader.IsTerminal() {
-		return nil, errors.New("password input requires a terminal (input is not a TTY)")
+	fd := int(os.Stdin.Fd())
+	if !term.IsTerminal(fd) {
+		// When stdin is used for data (pipes), open terminal device for password input
+		// TODO: Use "CON" on Windows instead of "/dev/tty"
+		tty, err := os.Open("/dev/tty")
+		if err != nil {
+			return nil, fmt.Errorf("allocating terminal for password input: %w", err)
+		}
+		defer tty.Close()
+
+		fd = int(tty.Fd())
 	}
 
-	password, err := reader.ReadPassword("Enter password: ", output)
+	_, _ = fmt.Fprint(promptOutput, "Enter password: ")
+	password, err := term.ReadPassword(fd)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read password: %w", err)
 	}
+	_, _ = fmt.Fprintln(promptOutput)
 
 	if len(password) == 0 {
 		return nil, errors.New("password cannot be empty")
 	}
 
-	if !confirm {
+	if !confirmPassword {
 		return password, nil
 	}
 
-	confirmPassword, err := reader.ReadPassword("Confirm password: ", output)
+	_, _ = fmt.Fprint(promptOutput, "Confirm password: ")
+	password2, err := term.ReadPassword(fd)
 	if err != nil {
-		ZeroPassword(password)
-		return nil, fmt.Errorf("failed to read confirmation password: %w", err)
+		return nil, fmt.Errorf(" read password confirmation: %w", err)
 	}
+	_, _ = fmt.Fprintln(promptOutput)
 
-	if !bytes.Equal(password, confirmPassword) {
-		ZeroPassword(password)
-		ZeroPassword(confirmPassword)
+	if !bytes.Equal(password, password2) {
 		return nil, errors.New("passwords do not match")
 	}
 
-	ZeroPassword(confirmPassword)
 	return password, nil
-}
-
-func ZeroPassword(password []byte) {
-	for i := range password {
-		password[i] = 0
-	}
 }

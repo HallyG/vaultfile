@@ -124,11 +124,10 @@ func processContent(ctx context.Context, input string, output string, force bool
 		return fmt.Errorf("failed to read input: %w", err)
 	}
 
-	password, err := PromptPassword(nil, os.Stderr, confirmPassword)
+	password, err := PromptPassword(os.Stderr, confirmPassword)
 	if err != nil {
-		return fmt.Errorf("failed to read password: %w", err)
+		return fmt.Errorf("read password: %w", err)
 	}
-	defer ZeroPassword(password)
 
 	logger := slog.Default()
 	v, err := vault.New(vault.WithLogger(logger))
