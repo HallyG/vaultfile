@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"hash"
+	"math"
 	"testing"
 
 	"github.com/HallyG/vaultfile/internal/vault/format"
@@ -53,8 +54,12 @@ func TestReadCipherText(t *testing.T) {
 		t.Parallel()
 
 		cipherText := []byte("test ciphertext data")
+		length := format.TotalHeaderLen + len(cipherText)
+		require.LessOrEqual(t, length, math.MaxUint16)
+
 		header := &format.Header{
-			TotalPayloadLength: uint16(format.TotalHeaderLen + len(cipherText)),
+			// #nosec G115 - length is guaranteed to be < 65536
+			TotalPayloadLength: uint16(length),
 		}
 
 		result, err := format.ReadCipherText(bytes.NewReader(cipherText), header)
