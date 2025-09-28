@@ -38,8 +38,8 @@ func TestConstants(t *testing.T) {
 	assert.Equal(t, "HGVF", magicNumber)
 	assert.Equal(t, 4, magicNumberLen)
 	assert.Equal(t, 1, versionLen)
-	assert.Equal(t, 16, saltLen)
-	assert.Equal(t, 24, nonceLen)
+	assert.Equal(t, 16, SaltLen)
+	assert.Equal(t, 24, NonceLen)
 	assert.Equal(t, 9, kdfLen)
 	assert.Equal(t, 2, totalFileLengthLen)
 	assert.Equal(t, 32, hmacLen)
@@ -136,7 +136,7 @@ func TestEncodeHeader(t *testing.T) {
 
 		assert.Equal(t, []byte(magicNumber), data[:magicNumberLen])
 		assert.Equal(t, byte(VersionV1), data[magicNumberLen])
-		assert.Equal(t, salt[:], data[magicNumberLen+versionLen:magicNumberLen+versionLen+saltLen])
+		assert.Equal(t, salt[:], data[magicNumberLen+versionLen:magicNumberLen+versionLen+SaltLen])
 	})
 }
 
@@ -287,11 +287,11 @@ func createValidHeaderData(tb testing.TB) []byte {
 
 	salt := [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
 	copy(data[offset:], salt[:])
-	offset += saltLen
+	offset += SaltLen
 
 	nonce := [24]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24}
 	copy(data[offset:], nonce[:])
-	offset += nonceLen
+	offset += NonceLen
 
 	kdfParams := getTestKDFParams()
 	kdfBytes, err := encodeKDFParams(&kdfParams)

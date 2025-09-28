@@ -25,23 +25,23 @@ const (
 	magicNumber                = "HGVF"
 	magicNumberLen             = len(magicNumber)
 	versionLen                 = 1
-	saltLen                    = 16
-	nonceLen                   = 24
+	SaltLen                    = 16
+	NonceLen                   = 24
 	kdfMemoryLen               = 4
 	kdfIterationsLen           = 4
 	kdfThreadsLen              = 1
 	kdfLen                     = kdfMemoryLen + kdfIterationsLen + kdfThreadsLen
 	totalFileLengthLen         = 2
 	hmacLen                    = sha256.Size
-	TotalHeaderLen             = magicNumberLen + versionLen + saltLen + nonceLen + kdfLen + totalFileLengthLen + hmacLen
+	TotalHeaderLen             = magicNumberLen + versionLen + SaltLen + NonceLen + kdfLen + totalFileLengthLen + hmacLen
 	MaxCipherTextSize          = math.MaxUint16
 )
 
 type Header struct {
 	MagicNumber               [magicNumberLen]byte
 	Version                   Version
-	CipherTextKeySalt         [saltLen]byte
-	CipherTextKeyNonce        [nonceLen]byte
+	CipherTextKeySalt         [SaltLen]byte
+	CipherTextKeyNonce        [NonceLen]byte
 	cipherTextKeyKDFParamsRaw [kdfLen]byte
 	CipherTextKeyKDFParams    KDFParams
 	TotalPayloadLength        uint16
@@ -79,11 +79,11 @@ func ParseHeader(input io.Reader) (*Header, io.Reader, error) {
 		return nil, nil, fmt.Errorf("invalid version: expected version %s, got %s", VersionV1, header.Version)
 	}
 
-	copy(header.CipherTextKeySalt[:], headerBuf[offset:offset+saltLen])
-	offset += saltLen
+	copy(header.CipherTextKeySalt[:], headerBuf[offset:offset+SaltLen])
+	offset += SaltLen
 
-	copy(header.CipherTextKeyNonce[:], headerBuf[offset:offset+nonceLen])
-	offset += nonceLen
+	copy(header.CipherTextKeyNonce[:], headerBuf[offset:offset+NonceLen])
+	offset += NonceLen
 
 	copy(header.cipherTextKeyKDFParamsRaw[:], headerBuf[offset:offset+kdfLen])
 	offset += kdfLen
@@ -108,7 +108,7 @@ func ParseHeader(input io.Reader) (*Header, io.Reader, error) {
 	return &header, payload, nil
 }
 
-func EncodeHeader(output io.Writer, mac hash.Hash, salt [saltLen]byte, nonce [nonceLen]byte, kdfParams KDFParams, cipherTextLen uint16) error {
+func EncodeHeader(output io.Writer, mac hash.Hash, salt [SaltLen]byte, nonce [NonceLen]byte, kdfParams KDFParams, cipherTextLen uint16) error {
 	w := io.MultiWriter(output, mac)
 
 	if _, err := w.Write([]byte(magicNumber)); err != nil {

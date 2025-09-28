@@ -105,8 +105,8 @@ func (v *Vault) Encrypt(ctx context.Context, output io.Writer, password []byte, 
 	if err := format.EncodeHeader(
 		output,
 		hmac.New(sha256.New, hmacKey),
-		[16]byte(salt),
-		[24]byte(nonce),
+		[format.SaltLen]byte(salt),
+		[format.NonceLen]byte(nonce),
 		format.KDFParams{
 			MemoryKiB:     v.kdfParams.MemoryKiB,
 			NumIterations: v.kdfParams.NumIterations,
