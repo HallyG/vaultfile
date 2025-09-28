@@ -21,7 +21,7 @@ GOLANGCI_ARGS ?= --fix --concurrency=4
 .PHONY: help
 help:
 	@echo 'Usage:'
-	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':' |  sed -e 's/^/ /'
+	@sed -n 's/^##//p' ${MAKEFILE_LIST} | sort | column -t -s ':' |  sed -e 's/^/ /'
 
 ## clean: remove build artifacts and temporary files
 .PHONY: clean
