@@ -46,7 +46,7 @@ Documentation about the `vaultfile` binary format can be found [here](./docs/vau
 
 ## Examples
 
-Below are some basic usage examples. More can be found in the [examples directory](./examples/main.go).
+Below are some basic usage examples. More can be found in the [examples directory](./examples).
 
 ### Encrypting a File
 
