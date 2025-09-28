@@ -13,6 +13,8 @@ const (
 )
 
 func TestNewChaCha20Crypto(t *testing.T) {
+	t.Parallel()
+
 	t.Run("error when key too short", func(t *testing.T) {
 		t.Parallel()
 
@@ -28,6 +30,8 @@ func TestNewChaCha20Crypto(t *testing.T) {
 }
 
 func TestChaCha20Crypto(t *testing.T) {
+	t.Parallel()
+
 	setup := func(t *testing.T) krypto.Krypto {
 		t.Helper()
 

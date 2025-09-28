@@ -13,6 +13,8 @@ import (
 )
 
 func TestV1Format(t *testing.T) {
+	t.Parallel()
+
 	setup := func(t *testing.T, plainText []byte) (*vault.Vault, []byte, []byte, []byte) {
 		t.Helper()
 
@@ -26,26 +28,6 @@ func TestV1Format(t *testing.T) {
 
 		return v, buf.Bytes(), plainText, password
 	}
-
-	t.Run("error when nil writer", func(t *testing.T) {
-		t.Parallel()
-
-		v, err := vault.New()
-		require.NoError(t, err)
-
-		err = v.Encrypt(t.Context(), nil, []byte("password"), []byte("test"))
-		require.ErrorContains(t, err, "output writer cannot be nil")
-	})
-
-	t.Run("error when nil reader", func(t *testing.T) {
-		t.Parallel()
-
-		v, err := vault.New()
-		require.NoError(t, err)
-
-		_, err = v.Decrypt(t.Context(), nil, []byte("password"))
-		require.ErrorContains(t, err, "input reader cannot be nil")
-	})
 
 	t.Run("version is v1", func(t *testing.T) {
 		t.Parallel()
@@ -65,7 +47,7 @@ func TestV1Format(t *testing.T) {
 		require.Equal(t, plainText, decrypted)
 	})
 
-	t.Run("success encrypt and decrypt when empty plaintext", func(t *testing.T) {
+	t.Run("successful encrypt and decrypt when empty plaintext", func(t *testing.T) {
 		t.Parallel()
 
 		vault, cipherText, _, password := setup(t, []byte{})
@@ -75,7 +57,27 @@ func TestV1Format(t *testing.T) {
 		require.Empty(t, decrypted)
 	})
 
-	t.Run("error when decrypt with wrong password", func(t *testing.T) {
+	t.Run("returns error when nil writer", func(t *testing.T) {
+		t.Parallel()
+
+		v, err := vault.New()
+		require.NoError(t, err)
+
+		err = v.Encrypt(t.Context(), nil, []byte("password"), []byte("test"))
+		require.ErrorContains(t, err, "output writer cannot be nil")
+	})
+
+	t.Run("returns error when nil reader", func(t *testing.T) {
+		t.Parallel()
+
+		v, err := vault.New()
+		require.NoError(t, err)
+
+		_, err = v.Decrypt(t.Context(), nil, []byte("password"))
+		require.ErrorContains(t, err, "input reader cannot be nil")
+	})
+
+	t.Run("returns error when decrypt with wrong password", func(t *testing.T) {
 		t.Parallel()
 
 		vault, cipherText, _, _ := setup(t, []byte("hello, world!"))
@@ -85,7 +87,7 @@ func TestV1Format(t *testing.T) {
 		require.Empty(t, decrypted)
 	})
 
-	t.Run("error on encrypt with empty password", func(t *testing.T) {
+	t.Run("returns error on encrypt with empty password", func(t *testing.T) {
 		t.Parallel()
 
 		v, err := vault.New()
@@ -96,7 +98,7 @@ func TestV1Format(t *testing.T) {
 		require.ErrorContains(t, err, "password must be at least 1 characters long")
 	})
 
-	t.Run("error on encrypt when ciphertext too big", func(t *testing.T) {
+	t.Run("returns error on encrypt when ciphertext too big", func(t *testing.T) {
 		t.Parallel()
 
 		password := []byte("some-long-password")
@@ -109,7 +111,7 @@ func TestV1Format(t *testing.T) {
 
 	})
 
-	t.Run("error on decrypt when ciphertext truncated", func(t *testing.T) {
+	t.Run("returns error on decrypt when ciphertext truncated", func(t *testing.T) {
 		t.Parallel()
 
 		v, cipherText, _, password := setup(t, []byte("hello, world!"))
@@ -234,8 +236,7 @@ func BenchmarkEncrypt(b *testing.B) {
 		plainText[i] = byte(i % 256)
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var buf bytes.Buffer
 		err := v.Encrypt(context.Background(), &buf, password, plainText)
 		if err != nil {
@@ -262,8 +263,7 @@ func BenchmarkDecrypt(b *testing.B) {
 	}
 	cipherText := buf.Bytes()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if _, err := v.Decrypt(context.Background(), bytes.NewReader(cipherText), password); err != nil {
 			b.Fatal(err)
 		}

@@ -12,6 +12,8 @@ import (
 )
 
 func TestVersionString(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		version  Version
 		expected string
@@ -31,6 +33,8 @@ func TestVersionString(t *testing.T) {
 }
 
 func TestParseHeader(t *testing.T) {
+	t.Parallel()
+
 	t.Run("error when input reader is nil", func(t *testing.T) {
 		t.Parallel()
 
@@ -97,6 +101,8 @@ func TestParseHeader(t *testing.T) {
 }
 
 func TestEncodeHeader(t *testing.T) {
+	t.Parallel()
+
 	t.Run("successful encode header", func(t *testing.T) {
 		t.Parallel()
 
@@ -124,6 +130,8 @@ func TestEncodeHeader(t *testing.T) {
 }
 
 func TestValidateMAC(t *testing.T) {
+	t.Parallel()
+
 	createHeader := func() *Header {
 		return &Header{
 			MagicNumber:               [4]byte{'H', 'G', 'V', 'F'},
@@ -164,6 +172,8 @@ func TestValidateMAC(t *testing.T) {
 }
 
 func TestKDFParams(t *testing.T) {
+	t.Parallel()
+
 	t.Run("parse KDF params", func(t *testing.T) {
 		t.Parallel()
 
@@ -219,6 +229,8 @@ func TestKDFParams(t *testing.T) {
 }
 
 func TestReadCipherText(t *testing.T) {
+	t.Parallel()
+
 	t.Run("successful read", func(t *testing.T) {
 		t.Parallel()
 
@@ -303,8 +315,8 @@ func BenchmarkEncode(b *testing.B) {
 	}
 }
 
-func createValidHeaderData(t testing.TB) []byte {
-	t.Helper()
+func createValidHeaderData(tb testing.TB) []byte {
+	tb.Helper()
 
 	data := make([]byte, TotalHeaderLen)
 	offset := 0
@@ -330,7 +342,7 @@ func createValidHeaderData(t testing.TB) []byte {
 	}
 	kdfBytes, err := encodeKDFParams(kdfParams)
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	copy(data[offset:], kdfBytes[:])
 	offset += kdfLen
