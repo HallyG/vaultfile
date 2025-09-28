@@ -15,7 +15,7 @@ import (
 
 type Vault struct {
 	logger    *slog.Logger
-	kdfParams *krypto.Argon2idParams
+	kdfParams krypto.Argon2idParams
 }
 
 func WithLogger(logger *slog.Logger) func(*Vault) {
@@ -26,7 +26,7 @@ func WithLogger(logger *slog.Logger) func(*Vault) {
 
 func WithKDFParams(kdfParams krypto.Argon2idParams) func(*Vault) {
 	return func(v *Vault) {
-		v.kdfParams = &kdfParams
+		v.kdfParams = kdfParams
 	}
 }
 
@@ -53,6 +53,20 @@ func (v *Vault) Version() format.Version {
 func (v *Vault) Encrypt(ctx context.Context, output io.Writer, password []byte, plainText []byte) error {
 	if output == nil {
 		return errors.New("output writer cannot be nil")
+	}
+
+	if password == nil {
+		return errors.New("password cannot be nil")
+	}
+
+	if plainText == nil {
+		return errors.New("plaintext cannot be nil")
+	}
+
+	// Assumes we are using [krypto.NewChaCha20Crypto] because XChaCha20-Poly1305 is a
+	// stream cipher (hence output=input bytes) with an additional 16 byte auth tag.
+	if len(plainText) > format.MaxCipherTextSize-16 {
+		return fmt.Errorf("plaintext exceeds maximum of %d bytes, got %d", format.MaxCipherTextSize-64, len(plainText))
 	}
 
 	salt, err := krypto.GenerateSalt(krypto.MinSaltLength)
@@ -91,8 +105,8 @@ func (v *Vault) Encrypt(ctx context.Context, output io.Writer, password []byte, 
 	if err := format.EncodeHeader(
 		output,
 		hmac.New(sha256.New, hmacKey),
-		[16]byte(salt),
-		[24]byte(nonce),
+		[format.SaltLen]byte(salt),
+		[format.NonceLen]byte(nonce),
 		format.KDFParams{
 			MemoryKiB:     v.kdfParams.MemoryKiB,
 			NumIterations: v.kdfParams.NumIterations,
@@ -115,6 +129,10 @@ func (v *Vault) Decrypt(ctx context.Context, input io.Reader, password []byte) (
 		return nil, errors.New("input reader cannot be nil")
 	}
 
+	if password == nil {
+		return nil, errors.New("password cannot be nil")
+	}
+
 	v.logger.Debug("parsing header")
 
 	header, r, err := format.ParseHeader(input)
@@ -122,7 +140,7 @@ func (v *Vault) Decrypt(ctx context.Context, input io.Reader, password []byte) (
 		return nil, fmt.Errorf("reading header: %w", err)
 	}
 
-	internalKDFParams := &krypto.Argon2idParams{
+	internalKDFParams := krypto.Argon2idParams{
 		MemoryKiB:     header.CipherTextKeyKDFParams.MemoryKiB,
 		NumIterations: header.CipherTextKeyKDFParams.NumIterations,
 		NumThreads:    header.CipherTextKeyKDFParams.NumThreads,
@@ -171,6 +189,6 @@ func (v *Vault) deriveHMACKey(ctx context.Context, password []byte, salt []byte,
 	return krypto.DeriveKeyFromPassword(ctx, password, salt, kdfParams, keySize)
 }
 
-func (v *Vault) deriveEncryptionKey(ctx context.Context, password []byte, salt []byte, kdfParams *krypto.Argon2idParams, keySize uint32) ([]byte, error) {
+func (v *Vault) deriveEncryptionKey(ctx context.Context, password []byte, salt []byte, kdfParams krypto.Argon2idParams, keySize uint32) ([]byte, error) {
 	return krypto.DeriveKeyFromPassword(ctx, password, salt, kdfParams, keySize)
 }
