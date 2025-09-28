@@ -10,6 +10,8 @@ import (
 )
 
 func TestDefaultArgon2idParams(t *testing.T) {
+	t.Parallel()
+
 	t.Run("default argon2id returns expected values", func(t *testing.T) {
 		t.Parallel()
 
@@ -22,6 +24,8 @@ func TestDefaultArgon2idParams(t *testing.T) {
 }
 
 func TestGenerateSalt(t *testing.T) {
+	t.Parallel()
+
 	tests := map[string]struct {
 		saltLength   uint32
 		expectedErr  error
@@ -70,6 +74,8 @@ func TestGenerateSalt(t *testing.T) {
 }
 
 func TestDeriveKeyFromPassword(t *testing.T) {
+	t.Parallel()
+
 	basicArgonParams := func() *krypto.Argon2idParams {
 		return &krypto.Argon2idParams{
 			MemoryKiB:     1,
