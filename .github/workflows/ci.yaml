@@ -31,9 +31,14 @@ jobs:
           cache-dependency-path: go.sum
       - name: Run tests
         run: go test ./... -timeout 60s -race -coverprofile=coverage.txt -covermode=atomic
+      - name: Prepare artifact name
+        id: prepare
+        run: |
+          sanitized_branch_name=$(echo "${GITHUB_REF_NAME}" | tr '/' '-')
+          echo "branch_name=${sanitized_branch_name}" >> $GITHUB_OUTPUT
       - name: Upload test coverage
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: coverage-${{ matrix.os }}-${{ github.run_number }}
+          name: coverage-${{ steps.prepare.outputs.branch_name }}-${{ matrix.os }}-${{ github.run_number }}
           path: coverage.txt
           retention-days: 1
